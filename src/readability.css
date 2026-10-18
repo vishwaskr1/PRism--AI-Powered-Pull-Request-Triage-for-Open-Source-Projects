@@ -1,0 +1,288 @@
+/*
+ * Readability + responsive navigation layer.
+ * Loaded after every other landing stylesheet so these sizes win over the older
+ * per-breakpoint values. Rules are prefixed with .landing-page for specificity.
+ * Type scale: labels 12px, meta 13px, card body 14–15px, body copy 16–17px.
+ */
+
+/* ---------- Hero focus ring ----------
+ * The headline is focused programmatically on load (for screen readers);
+ * that must not draw a visible box around it. */
+.landing-page .landing-copy h1:focus { outline: none; }
+
+/* ---------- Navigation ---------- */
+.landing-page .landing-nav { z-index: 20; }
+.landing-page .landing-nav nav a { font-size: 14px; }
+.landing-page .landing-nav-cta { font-size: 14px; min-height: 42px; }
+.landing-page .landing-try-sample { font-size: 14px; white-space: nowrap; }
+.landing-page .theme-toggle { font-size: 13px; min-height: 40px; padding: 0 12px; }
+.nav-menu-extras { display: none; }
+.nav-menu-toggle {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #62559b;
+  border-radius: 9px;
+  background: transparent;
+  color: #e4ddff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.nav-menu-toggle svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.nav-menu-toggle:hover, .landing-nav.menu-open .nav-menu-toggle { background: rgba(139, 124, 246, .14); }
+
+/* Compact (phone / tablet / small laptop): links move into a drop-down panel. */
+@media (max-width: 1180px) {
+  .landing-page .landing-nav {
+    width: calc(100% - 32px);
+    max-width: 1220px;
+    height: 72px;
+    min-height: 0;
+    padding: 0;
+    flex-wrap: nowrap;
+  }
+  .landing-page .landing-nav-actions { gap: 10px; }
+  .landing-page .landing-nav-actions .landing-try-sample,
+  .landing-page .landing-nav-actions .landing-nav-cta { display: none; }
+  .nav-menu-toggle { display: grid; }
+
+  .landing-page .landing-nav nav {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    order: 0;
+    width: auto;
+    margin: 0;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+    overflow: visible;
+    border: 1px solid #34304a;
+    border-radius: 14px;
+    background: #121118;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+    /* Hidden state: invisible and not focusable/tappable. */
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+  }
+  .landing-page .landing-nav.menu-open nav {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .landing-page .landing-nav nav a {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 9px;
+    color: #e3dfea;
+    font-size: 16px;
+    white-space: normal;
+  }
+  .landing-page .landing-nav nav > a:active,
+  .landing-page .landing-nav nav > a:hover { background: rgba(139, 124, 246, .12); color: #fff; }
+  .landing-page .nav-menu-extras {
+    display: grid;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 12px 6px 6px;
+    border-top: 1px solid #2c2838;
+  }
+  .landing-page .nav-menu-extras .landing-primary { justify-content: center; min-height: 48px; color: #fff; font-size: 15px; }
+  .landing-page .nav-menu-extras .landing-secondary { justify-content: center; color: #cfc6ff; font-size: 15px; }
+}
+@media (max-width: 1180px) and (min-width: 651px) {
+  /* On tablets the panel sits under the right edge instead of spanning the page. */
+  .landing-page .landing-nav nav { left: auto; width: 320px; }
+}
+@media (max-width: 380px) {
+  .landing-page .landing-nav .brand { font-size: 17px; }
+  .landing-page .theme-toggle { padding: 0 10px; }
+}
+
+/* Light theme for the new menu pieces. */
+html[data-theme="light"] .nav-menu-toggle { border-color: #b7addd; color: #51438f; }
+html[data-theme="light"] .nav-menu-toggle:hover,
+html[data-theme="light"] .landing-nav.menu-open .nav-menu-toggle { background: #efecfa; }
+@media (max-width: 1180px) {
+  html[data-theme="light"] .landing-page .landing-nav nav { border-color: #ded9e8; background: #ffffff; box-shadow: 0 20px 50px rgba(43, 34, 73, .14); }
+  html[data-theme="light"] .landing-page .landing-nav nav > a { color: #302b3b; }
+  html[data-theme="light"] .landing-page .landing-nav nav > a:hover { background: #f0edfb; color: #211d2b; }
+  html[data-theme="light"] .landing-page .nav-menu-extras { border-color: #e2deea; }
+  html[data-theme="light"] .landing-page .nav-menu-extras .landing-secondary { color: #51438f; }
+}
+
+/* ---------- Hero ---------- */
+.landing-page .landing-kicker { font-size: 12px; letter-spacing: .12em; }
+.landing-page .landing-description { max-width: 520px; font-size: 18px; line-height: 1.7; }
+.landing-page .landing-primary { font-size: 15px; min-height: 50px; padding: 0 22px; }
+.landing-page .landing-secondary { font-size: 15px; }
+.landing-page .landing-assurance { font-size: 13px; }
+.landing-page .assurance-icon { width: 18px; height: 18px; font-size: 11px; }
+
+/* Illustrative preview window (was 6–10px). */
+.landing-page .preview-window-bar { height: 44px; font-size: 10px; }
+.landing-page .preview-online { font-size: 10px; }
+.landing-page .preview-repo strong { font-size: 14px; }
+.landing-page .preview-repo small { font-size: 12px; }
+.landing-page .preview-status { font-size: 10px; padding: 6px 8px; }
+.landing-page .preview-section-label { font-size: 10px; }
+.landing-page .preview-signal strong { font-size: 13px; }
+.landing-page .preview-signal small { font-size: 12px; }
+.landing-page .signal-mark { width: 24px; height: 24px; font-size: 12px; }
+.landing-page .preview-files > span { font-size: 12px; }
+.landing-page .evidence-label { font-size: 10px; }
+.landing-page .code-snippet { font-size: 12px; }
+.landing-page .preview-explanation { font-size: 13px; line-height: 1.6; }
+.landing-page .preview-foot { font-size: 11px; }
+.landing-page .preview-caption { font-size: 11px; }
+
+/* ---------- Section headings & generic copy ---------- */
+.landing-page .landing-rule { font-size: 11px; }
+.landing-page .landing-section-kicker { font-size: 12px; letter-spacing: .12em; }
+.landing-page .landing-section-heading > p,
+.landing-page .landing-close > p { font-size: 17px; line-height: 1.7; }
+.landing-page .feature-number { font-size: 12px; }
+.landing-page .landing-features h2 { font-size: 18px; }
+.landing-page .landing-features p { max-width: 360px; font-size: 16px; line-height: 1.7; }
+
+/* How it works */
+.landing-page .landing-steps article > span { font-size: 12px; }
+.landing-page .landing-steps h3 { font-size: 17px; }
+.landing-page .landing-steps p { font-size: 16px; line-height: 1.65; }
+
+/* Try it */
+.landing-page .trial-form input,
+.landing-page .trial-pull-picker select { height: 50px; font-size: 16px; /* 16px stops Android/iOS zoom-on-focus */ }
+.landing-page .trial-message,
+.landing-page .trial-dashboard-hint { font-size: 14px; }
+.landing-page .trial-pull-picker label { font-size: 14px; }
+.landing-page .trial-result-banner { font-size: 12px; }
+.landing-page .trial-repo-name { font-size: 13px; }
+.landing-page .trial-result-head h3 { font-size: 18px; }
+.landing-page .triage-badge { font-size: 12px; padding: 6px 10px; }
+.landing-page .trial-result-summary { font-size: 16px; }
+.landing-page .trial-finding-title strong,
+.landing-page .failure-rule-title strong { font-size: 14px; }
+.landing-page .source-badge { font-size: 11px; }
+.landing-page .trial-finding p { font-size: 15px; }
+.landing-page .trial-empty-findings { font-size: 14px; }
+.landing-page .trial-evidence-heading { font-size: 12px; }
+.landing-page .trial-evidence-heading small { font-size: 12px; }
+.landing-page .trial-evidence blockquote { font-size: 13px; }
+.landing-page .trial-limitations { font-size: 13px; }
+.landing-page .trial-limitations > strong { font-size: 14px; }
+.landing-page .trial-pr-link { font-size: 14px; }
+
+/* Triage categories */
+.landing-page .triage-meaning { font-size: 15px; }
+.landing-page .triage-when,
+.landing-page .triage-when strong { font-size: 13px; }
+.landing-page .triage-card blockquote { font-size: 13px; }
+.landing-page .triage-example-note { font-size: 15px; }
+.landing-page .triage-caution strong { font-size: 15px; }
+.landing-page .triage-caution p { font-size: 14px; }
+
+/* Trust */
+.landing-page .trust-card-index { font-size: 12px; }
+.landing-page .trust-card h3 { font-size: 16px; }
+.landing-page .trust-card p { font-size: 15px; }
+.landing-page .trust-diagram-copy p { font-size: 15px; }
+.landing-page .evidence-flow-svg text { font-size: 13px; }
+
+/* Open / local */
+.landing-page .local-points li { font-size: 15px; }
+.landing-page .local-links .landing-secondary { font-size: 15px; }
+.landing-page .repo-placeholder-note { font-size: 12px; }
+.landing-page .local-status-heading { font-size: 11px; }
+.landing-page .status-chip { font-size: 12px; }
+.landing-page .local-status-card li { font-size: 15px; }
+.landing-page .feature-status { font-size: 12px; }
+.landing-page .feature-status-detail { font-size: 13px; }
+.landing-page .local-status-card > p { font-size: 13px; }
+
+/* Honest failure */
+.landing-page .failure-intro > p { font-size: 16px; }
+.landing-page .failure-mockup-top { font-size: 12px; }
+.landing-page .failure-ai-panel { font-size: 14px; }
+.landing-page .failure-rule-panel blockquote { font-size: 13px; }
+.landing-page .failure-rule-panel > p { font-size: 12px; }
+
+/* FAQ */
+.landing-page .landing-faq-list summary { min-height: 56px; font-size: 16px; }
+.landing-page .landing-faq-list summary span { font-size: 22px; }
+.landing-page .landing-faq-list details p { font-size: 16px; }
+
+/* Closing + footer */
+.landing-page .landing-close-actions .landing-secondary { font-size: 15px; }
+.landing-page .landing-footer { font-size: 13px; }
+.landing-page .landing-footer .brand { font-size: 16px; }
+.landing-page .landing-footer-links a,
+.dashboard-page .landing-footer-links a { display: inline-flex; align-items: center; min-height: 32px; font-size: 14px; }
+
+/* ---------- Phone adjustments ---------- */
+@media (max-width: 650px) {
+  .landing-page .landing-hero { padding-top: 40px; }
+  .landing-page .landing-description { font-size: 17px; }
+  .landing-page .landing-actions { width: 100%; }
+  .landing-page .landing-actions .landing-primary { width: 100%; }
+  .landing-page .landing-actions .landing-secondary { min-height: 44px; display: inline-flex; align-items: center; }
+  .landing-page .landing-rule { font-size: 10px; letter-spacing: .06em; }
+  .landing-page .landing-section-heading h2,
+  .landing-page .landing-close h2 { font-size: 30px; }
+  .landing-page .trial-actions { grid-template-columns: 1fr; }
+  .landing-page .trial-actions .landing-primary { width: 100%; }
+  .landing-page .landing-close .landing-primary { width: 100%; }
+  .landing-page .preview-files { grid-template-columns: 1fr; }
+}
+
+/* A second readability step for smaller supporting text across the landing page. */
+.landing-page .landing-kicker,
+.landing-page .landing-section-kicker { font-size: 13px; }
+.landing-page .landing-description { font-size: 19px; }
+.landing-page .landing-features p,
+.landing-page .landing-steps p,
+.landing-page .trust-card p,
+.landing-page .trust-diagram-copy p,
+.landing-page .triage-meaning,
+.landing-page .landing-faq-list details p { font-size: 17px; }
+.landing-page .trial-message,
+.landing-page .trial-dashboard-hint,
+.landing-page .trial-pull-picker label,
+.landing-page .trial-finding p,
+.landing-page .local-points li,
+.landing-page .failure-intro > p { font-size: 16px; }
+.landing-page .trial-limitations,
+.landing-page .trial-evidence blockquote,
+.landing-page .triage-when,
+.landing-page .triage-when strong,
+.landing-page .triage-card blockquote,
+.landing-page .triage-caution p,
+.landing-page .feature-status-detail,
+.landing-page .failure-rule-panel blockquote { font-size: 14px; }
+.landing-page .preview-window-bar,
+.landing-page .preview-online,
+.landing-page .preview-status,
+.landing-page .preview-section-label,
+.landing-page .evidence-label { font-size: 11px; }
+.landing-page .preview-repo small,
+.landing-page .preview-signal small,
+.landing-page .preview-files > span,
+.landing-page .code-snippet,
+.landing-page .preview-foot,
+.landing-page .preview-caption { font-size: 13px; }
+@media (max-width: 650px) {
+  .landing-page .landing-description { font-size: 18px; }
+}

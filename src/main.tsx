@@ -6,6 +6,7 @@ import { DASHBOARD_PATH } from './landing/content'
 import { Suspense, lazy } from 'react'
 import './index.css'
 import './theme.css'
+import './readability.css'
 import { ThemeProvider, readSavedTheme } from './theme'
 
 // Set the stored theme before React mounts to avoid a flash on page load.

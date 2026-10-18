@@ -37,6 +37,29 @@ export default function LandingPage() {
   useLandingMotion(true)
   const [sceneReady, setSceneReady] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = () => setMenuOpen(false)
+
+  // Close the compact menu on Escape, on a tap outside the header, or when the
+  // viewport grows back to the inline desktop navigation.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false) }
+    const onPointer = (event: PointerEvent) => {
+      if (headerRef.current && !headerRef.current.contains(event.target as Node)) setMenuOpen(false)
+    }
+    const wide = window.matchMedia("(min-width: 1181px)")
+    const onWide = () => { if (wide.matches) setMenuOpen(false) }
+    document.addEventListener("keydown", onKey)
+    document.addEventListener("pointerdown", onPointer)
+    wide.addEventListener?.("change", onWide)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("pointerdown", onPointer)
+      wide.removeEventListener?.("change", onWide)
+    }
+  }, [menuOpen])
 
   // Let the first text frame paint before the optional Three.js chunk is requested.
   useEffect(() => {
@@ -53,17 +76,35 @@ export default function LandingPage() {
 
   return (
       <main className="landing-page">
-        <header className="landing-nav">
-          <a href="#top" className="brand-link" aria-label={sectionNavNames.home}>
+        <header className={`landing-nav${menuOpen ? " menu-open" : ""}`} ref={headerRef}>
+          <a href="#top" className="brand-link" aria-label={sectionNavNames.home} onClick={closeMenu}>
             <Brand />
           </a>
-          <nav aria-label={sectionNavNames.main}>
-            {navigationCopy.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+          <nav id="landing-menu" aria-label={sectionNavNames.main}>
+            {navigationCopy.map((item) => <a href={item.href} key={item.href} onClick={closeMenu}>{item.label}</a>)}
+            <div className="nav-menu-extras">
+              <DashboardLink className="landing-primary" onClick={closeMenu}>{landingActions.openDashboard} <Arrow /></DashboardLink>
+              <a className="landing-secondary" href="#try-it" onClick={closeMenu}>{landingActions.trySample}</a>
+            </div>
           </nav>
           <div className="landing-nav-actions">
             <ThemeToggle />
             <DashboardLink className="landing-nav-cta">{landingActions.openDashboard} <Arrow /></DashboardLink>
             <a className="landing-try-sample" href="#try-it">{landingActions.trySample}</a>
+            <button
+              type="button"
+              className="nav-menu-toggle"
+              aria-expanded={menuOpen}
+              aria-controls="landing-menu"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                {menuOpen
+                  ? <path d="M6 6l12 12M18 6 6 18" />
+                  : <path d="M4 7h16M4 12h16M4 17h16" />}
+              </svg>
+            </button>
           </div>
         </header>
 

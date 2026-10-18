@@ -11,7 +11,7 @@
 .dashboard-back { color: #d2caff; font-size: 12px; text-decoration: none; }
 .dashboard-shell { width: min(880px, 100%); margin: 64px auto 78px; }
 .dashboard-heading h1 { margin-top: 12px; color: #f5f3fa; font-size: clamp(32px, 5vw, 48px); font-weight: 600; letter-spacing: -.055em; line-height: 1.08; }
-.dashboard-heading h1:focus-visible { outline: 2px solid #c2b5ff; outline-offset: 6px; border-radius: 2px; }
+.dashboard-heading h1:focus, .dashboard-heading h1:focus-visible { outline: none; } /* focused programmatically on load for screen readers */
 .dashboard-heading p { margin-top: 12px; color: #b3afbd; font-size: 14px; line-height: 1.7; }
 .dashboard-advisory { margin-top: 25px; padding: 14px 16px; border: 1px solid #4d426f; border-radius: 8px; background: #171421; color: #d4caff; font-size: 12px; line-height: 1.7; }
 .dashboard-repo-form { margin-top: 28px; }
@@ -193,10 +193,76 @@
   .dashboard-pr-list-heading { align-items: start; flex-direction: column; gap: 6px; }
 }
 
+/* Readability layer: raises the 9–12px dashboard text to a comfortable mobile scale. */
+.dashboard-page .dashboard-back { font-size: 14px; min-height: 40px; display: inline-flex; align-items: center; }
+.dashboard-page .theme-toggle { font-size: 13px; min-height: 40px; padding: 0 12px; }
+.dashboard-page .landing-section-kicker { font-size: 12px; letter-spacing: .12em; }
+.dashboard-page .dashboard-heading p { font-size: 16px; }
+.dashboard-page .dashboard-advisory { font-size: 14px; }
+.dashboard-page .dashboard-repo-form > label,
+.dashboard-page .dashboard-field > span { font-size: 14px; }
+.dashboard-page .dashboard-repo-row input,
+.dashboard-page .dashboard-field input:not([type="checkbox"]) { height: 50px; font-size: 16px; /* prevents zoom-on-focus on mobile */ }
+.dashboard-page .landing-primary { font-size: 15px; min-height: 50px; padding: 0 22px; }
+.dashboard-page .dashboard-panel-heading h2 { font-size: 18px; }
+.dashboard-page .dashboard-panel-heading span,
+.dashboard-page .dashboard-field small,
+.dashboard-page .dashboard-toggle small { font-size: 13px; }
+.dashboard-page .dashboard-toggle strong { font-size: 14px; }
+.dashboard-page .dashboard-toggle input { width: 22px; height: 22px; }
+.dashboard-page .dashboard-ai-provider { font-size: 14px; }
+.dashboard-page .dashboard-message,
+.dashboard-page .dashboard-notice { font-size: 14px; }
+.dashboard-page .dashboard-pr-list-heading h2 { font-size: 22px; }
+.dashboard-page .dashboard-pr-list-heading > span,
+.dashboard-page .dashboard-pr-controls { font-size: 14px; }
+.dashboard-page .dashboard-pr-instruction { font-size: 14px; }
+.dashboard-page .dashboard-pr-controls select { min-height: 44px; font-size: 15px; }
+.dashboard-page .dashboard-sample-banner { font-size: 13px; }
+.dashboard-page .dashboard-pr-table th { font-size: 12px; }
+.dashboard-page .dashboard-pr-table td { font-size: 14px; }
+.dashboard-page .dashboard-draft-badge { font-size: 11px; }
+.dashboard-page .dashboard-pr-category { font-size: 13px; padding: 5px 9px; }
+.dashboard-page .dashboard-pr-category small { font-size: 11px; }
+.dashboard-page .dashboard-pr-link { font-size: 14px; min-height: 40px; display: inline-flex; align-items: center; }
+.dashboard-page .dashboard-row-error { font-size: 13px; }
+.dashboard-page .dashboard-row-analyze { min-height: 40px; padding: 8px 14px; font-size: 14px; border-radius: 7px; }
+.dashboard-page .dashboard-spinner { width: 12px; height: 12px; }
+.dashboard-page .dashboard-results-heading h2 { font-size: 24px; }
+.dashboard-page .dashboard-results-heading p,
+.dashboard-page .dashboard-result-link { font-size: 14px; }
+.dashboard-page .dashboard-result-category { font-size: 14px; }
+.dashboard-page .dashboard-result-category small { font-size: 13px; }
+.dashboard-page .dashboard-result-meta { font-size: 13px; }
+.dashboard-page .dashboard-ai-error { font-size: 14px; }
+.dashboard-page .dashboard-summary { font-size: 15px; }
+.dashboard-page .dashboard-quality-card h3 { font-size: 16px; }
+.dashboard-page .dashboard-quality-card summary { min-height: 32px; }
+.dashboard-page .dashboard-quality-card ul,
+.dashboard-page .dashboard-quality-card p { font-size: 14px; }
+.dashboard-page .dashboard-analysis-loading { font-size: 15px; }
+.dashboard-page .dashboard-no-findings { font-size: 15px; }
+@media (max-width: 760px) {
+  .dashboard-page .dashboard-pr-table td::before { font-size: 12px; }
+  .dashboard-page .dashboard-pr-table tbody tr { padding: 6px 14px; }
+}
+@media (max-width: 620px) {
+  .dashboard-page .dashboard-back { font-size: 13px; }
+  .dashboard-page .dashboard-repo-row .landing-primary { align-self: stretch; }
+}
+
 @media (max-width: 430px) {
   .dashboard-finding-topline { align-items: flex-start; flex-direction: column; gap: 7px; }
   .dashboard-pr-table tbody tr { grid-template-columns: minmax(0, 1fr); }
   .dashboard-pr-table td { grid-template-columns: minmax(82px, 32%) minmax(0, 1fr); }
   .dashboard-pr-table td:last-child { border-bottom: 0; }
   .dashboard-result-header, .dashboard-finding-card { padding: 14px; }
+}
+
+/* Short "Home" label for the back link on phones. */
+.dashboard-back { gap: 6px; white-space: nowrap; }
+.dashboard-back-short { display: none; }
+@media (max-width: 620px) {
+  .dashboard-back-long { display: none; }
+  .dashboard-back-short { display: inline; }
 }

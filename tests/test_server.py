@@ -102,6 +102,11 @@ def test_analyze_pr_endpoint_caches_by_head_sha(monkeypatch):
             pass
 
     client = FixtureClient()
+    # No provider keys: a heuristic result is the final answer and may be cached.
+    no_keys = server.get_settings().model_copy(
+        update={"groq_api_key": None, "gemini_api_key": None}
+    )
+    monkeypatch.setattr(server, "get_settings", lambda: no_keys)
     monkeypatch.setattr(server, "_get_client", lambda: client)
     monkeypatch.setattr(
         server,
@@ -129,6 +134,52 @@ def test_analyze_pr_endpoint_caches_by_head_sha(monkeypatch):
     assert first.json()["cached"] is False
     assert second.json()["cached"] is True
     assert client.calls == ["pull", "files", "commits", "user", "pull"]
+    server._pr_review_cache.clear()
+
+
+def test_heuristic_fallback_is_not_cached_when_a_provider_is_configured(monkeypatch):
+    server._rate_buckets.clear()
+    server._pr_review_cache.clear()
+
+    class FixtureClient:
+        def pull_request_data(self, owner, repo, number):
+            return {"head": {"sha": "fallback-sha"}, "user": None}
+
+        def pull_request_files_data(self, owner, repo, number):
+            return []
+
+        def pull_request_commits(self, owner, repo, number):
+            return []
+
+        def close(self):
+            pass
+
+    keyed = server.get_settings().model_copy(update={"groq_api_key": "test-key"})
+    monkeypatch.setattr(server, "get_settings", lambda: keyed)
+    monkeypatch.setattr(server, "_get_client", lambda: FixtureClient())
+    monkeypatch.setattr(
+        server,
+        "analyze_pr_review",
+        lambda **kwargs: {
+            "verdict": "low_quality",
+            "score": 40,
+            "confidence": "low",
+            "summary": "Provider failed; heuristic estimate.",
+            "reasons": [],
+            "red_flags": [],
+            "green_flags": [],
+            "heuristic_score": 40,
+            "signals": {},
+            "source": "heuristic",
+            "model": "heuristic-v1",
+        },
+    )
+    api = TestClient(server.app)
+    first = api.post("/api/analyze-pr", json={"owner": "example", "repo": "project", "number": 5})
+    second = api.post("/api/analyze-pr", json={"owner": "example", "repo": "project", "number": 5})
+    assert first.status_code == 200
+    assert first.json()["cached"] is False
+    assert second.json()["cached"] is False
     server._pr_review_cache.clear()
 
 

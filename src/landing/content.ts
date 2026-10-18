@@ -84,7 +84,7 @@ export const footerLinks = [
   { label: "GitHub", href: REPOSITORY_URL, external: true },
   { label: "Specification", href: SPECIFICATION_URL, external: true },
   { label: "License (MIT)", href: `${REPOSITORY_URL}/blob/main/LICENSE`, external: true },
-  { label: "Contributing", href: `${REPOSITORY_URL}/blob/main/public/CONTRIBUTING.md`, external: true },
+  { label: "Contributing", href: `${REPOSITORY_URL}/blob/main/CONTRIBUTING.md`, external: true },
 ] as const
 
 export const trialCopy = {

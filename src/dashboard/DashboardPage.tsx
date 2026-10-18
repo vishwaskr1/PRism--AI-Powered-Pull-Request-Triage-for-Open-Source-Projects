@@ -25,6 +25,13 @@ function repoFromQuery(): string {
   }
 }
 
+// Context-only flags recorded by the backend that say nothing about PR quality.
+const CONTEXT_ONLY_SIGNALS = new Set(["hacktoberfest_season"])
+
+function countQualitySignals(signals: Record<string, unknown>) {
+  return Object.entries(signals).filter(([name, value]) => value === true && !CONTEXT_ONLY_SIGNALS.has(name)).length
+}
+
 function qualityCategory(analysis: QualityPullAnalysis) {
   switch (analysis.result.verdict) {
     case "genuine": return { label: "Likely legitimate", tone: "good" }
@@ -56,6 +63,7 @@ export default function DashboardPage() {
   const analysisQueue = useRef<Promise<void>>(Promise.resolve())
   const activeAnalysis = useRef<number | null>(null)
   const queuedAnalysis = useRef(new Set<number>())
+  const rateLimited = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -119,6 +127,7 @@ export default function DashboardPage() {
         const detail = await reviewPullRequest(repo, pull)
         setAnalyses((current) => ({ ...current, [pull.number]: detail }))
       } catch (error) {
+        if (error instanceof Error && /too many requests|rate limit/i.test(error.message)) rateLimited.current = true
         setRowErrors((current) => ({
           ...current,
           [pull.number]: error instanceof Error ? error.message : "The analysis request failed. Please try again.",
@@ -180,10 +189,16 @@ export default function DashboardPage() {
   const analyzeAllPulls = async () => {
     if (!repository || analyzeAllRunning) return
     setAnalyzeAllRunning(true)
+    rateLimited.current = false
     try {
       for (const [index, pull] of repository.pulls.entries()) {
         if (analyses[pull.number]) continue
         await analyzePull(repository, pull)
+        // Stop the batch once the server or GitHub rate-limits us; further requests would only fail.
+        if (rateLimited.current) {
+          setMessage("Stopped analyzing: the request limit was reached. Wait a few minutes, then continue with “Analyze all PRs” — finished results are kept.")
+          break
+        }
         if (index < repository.pulls.length - 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 2500))
         }
@@ -214,7 +229,7 @@ export default function DashboardPage() {
         <Link to={LANDING_PATH} className="brand-link" aria-label={sectionNavNames.home}><Brand /></Link>
         <div className="dashboard-nav-actions">
           <ThemeToggle />
-          <Link to={LANDING_PATH} className="dashboard-back">← Back to landing page</Link>
+          <Link to={LANDING_PATH} className="dashboard-back" aria-label="Back to landing page">← <span className="dashboard-back-long">Back to landing page</span><span className="dashboard-back-short" aria-hidden="true">Home</span></Link>
         </div>
       </header>
 
@@ -331,7 +346,7 @@ export default function DashboardPage() {
                 {repository.pulls.filter((pull) => categoryFilter === "all" || (analyses[pull.number] && qualityCategory(analyses[pull.number]).label === categoryFilter)).map((pull) => {
                   const detail = analyses[pull.number]
                   const rowError = rowErrors[pull.number]
-                  const count = detail ? Object.values(detail.result.signals).filter((value) => value === true).length : null
+                  const count = detail ? countQualitySignals(detail.result.signals) : null
                   const category = detail ? qualityCategory(detail) : null
                   return (
                     <tr

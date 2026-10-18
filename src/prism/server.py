@@ -231,11 +231,17 @@ def analyze_pr_endpoint(req: AnalyzePRRequest):
         result.update(
             {"owner": req.owner, "repo": req.repo, "number": req.number, "head_sha": head_sha}
         )
-        with _pr_review_cache_lock:
-            _pr_review_cache[cache_key] = result
-            _pr_review_cache.move_to_end(cache_key)
-            while len(_pr_review_cache) > _pr_review_cache_limit:
-                _pr_review_cache.popitem(last=False)
+        # A heuristic result produced only because a configured provider failed
+        # (timeout, 429, bad JSON) is transient; caching it would pin the fallback
+        # for this revision. Cache provider results, or heuristics when no provider exists.
+        current = get_settings()
+        provider_configured = bool(current.groq_api_key or current.gemini_api_key)
+        if result.get("source") != "heuristic" or not provider_configured:
+            with _pr_review_cache_lock:
+                _pr_review_cache[cache_key] = result
+                _pr_review_cache.move_to_end(cache_key)
+                while len(_pr_review_cache) > _pr_review_cache_limit:
+                    _pr_review_cache.popitem(last=False)
         return {**result, "cached": False}
     except GitHubRateLimit as exc:
         raise HTTPException(
