@@ -167,6 +167,41 @@ class GitHubClient:
     def pull_request(self, owner, repo, number):
         return self._pull(self._get("/repos/%s/%s/pulls/%s" % (owner, repo, number)))
 
+    def pull_request_data(self, owner, repo, number):
+        """Return GitHub's PR fields needed for advisory quality review."""
+        return self._get("/repos/%s/%s/pulls/%s" % (owner, repo, number))
+
+    def pull_request_files_data(self, owner, repo, number):
+        result = []
+        limit = min(self.settings.max_changed_files, 3000)
+        for page in range(1, 31):
+            data = self._get(
+                "/repos/%s/%s/pulls/%s/files" % (owner, repo, number),
+                {"per_page": min(100, limit), "page": page},
+            )
+            result.extend(data[: max(0, limit - len(result))])
+            if len(result) >= limit or len(data) < min(100, limit):
+                break
+        return result
+
+    def pull_request_commits(self, owner, repo, number):
+        result = []
+        for page in range(1, 4):
+            data = self._get(
+                "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
+                {"per_page": 100, "page": page},
+            )
+            result.extend(data[: max(0, 300 - len(result))])
+            if len(result) >= 300 or len(data) < 100:
+                break
+        return result
+
+    def user_profile(self, login):
+        """Return only public profile fields; missing profiles become unavailable context."""
+        from urllib.parse import quote
+
+        return self._get("/users/%s" % quote(login, safe=""))
+
     def changed_files(self, owner, repo, number):
         from prism.models import ChangedFile
 

@@ -1,8 +1,31 @@
 export interface DashboardSettings {
   pr_limit: number
-  ai_enabled: boolean
-  model_name: string
   sample_mode: boolean
+}
+
+export interface PRQualityResult {
+  verdict: "genuine" | "low_quality" | "spam"
+  score: number
+  confidence: "low" | "medium" | "high"
+  summary: string
+  reasons: string[]
+  red_flags: string[]
+  green_flags: string[]
+  heuristic_score: number
+  signals: Record<string, boolean | number | string | null>
+  source: "groq" | "gemma" | "heuristic"
+  model: string
+  cached: boolean
+  owner: string
+  repo: string
+  number: number
+  head_sha: string
+}
+
+export interface QualityPullAnalysis {
+  result: PRQualityResult
+  repository: DashboardRepository["metadata"]
+  pull: PullRequestSummary
 }
 
 export interface PullRequestSummary {
@@ -34,9 +57,12 @@ export interface DashboardEvidence {
 export interface DashboardFinding {
   source: "rule" | "ai"
   category: string
+  severity?: string
   title: string
   explanation: string
   evidence: DashboardEvidence[]
+  recommended_action?: string | null
+  confidence?: number
   overlap_similarity?: number | null
 }
 
@@ -56,9 +82,11 @@ export interface DashboardAnalysisResult {
   reason?: string | null
   findings: DashboardFinding[]
   uncertainty: string[]
+  ai_limitations?: string[]
   ai_enabled: boolean
   ai_status: "completed" | "failed" | "disabled"
-  ai_error?: "timeout" | "invalid_output" | "unreachable" | null
+  ai_error?: "timeout" | "invalid_output" | "unreachable" | "rate_limited" | "billing_required" | "auth_required" | null
+  ai_summary?: string | null
   guideline_status: "found" | "not_found" | "retrieval_failed"
   guideline_path?: string | null
   is_sample: boolean
@@ -67,9 +95,12 @@ export interface DashboardAnalysisResult {
 interface ApiFinding {
   source_type?: "rule" | "ai"
   category: string
+  severity?: string
   title: string
   explanation: string
   evidence: DashboardEvidence[]
+  recommended_action?: string | null
+  confidence?: number
   overlap_similarity?: number | null
 }
 
@@ -116,7 +147,7 @@ async function requestJson<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export function checkServiceStatus() {
-  return requestJson<{ status: string; ai_available: boolean }>("/api/status")
+  return requestJson<{ status: string; ai_available: boolean; groq_configured: boolean; gemini_configured: boolean }>("/api/status")
 }
 
 export function fetchRepository(repoUrl: string, settings: DashboardSettings) {
@@ -140,7 +171,12 @@ export async function analyzePullRequest(
       category: DashboardAnalysisResult["category"]
       reason?: DashboardAnalysisResult["reason"]
       findings: ApiFinding[]
-      summary: { limitations: string[]; ai_enabled: boolean }
+      summary: {
+        limitations: string[]
+        ai_limitations?: string[]
+        ai_enabled: boolean
+        ai_summary?: string | null
+      }
       ai_status: DashboardAnalysisResult["ai_status"]
       ai_error?: DashboardAnalysisResult["ai_error"]
       guideline_status: DashboardAnalysisResult["guideline_status"]
@@ -153,8 +189,8 @@ export async function analyzePullRequest(
     url: repoUrl,
     pull_number: pull.number,
     pr_limit: settings.pr_limit,
-    ai_enabled: settings.ai_enabled,
-    ollama_model: settings.model_name || null,
+    ai_enabled: false,
+    model_id: null,
   })
 
   return {
@@ -171,12 +207,19 @@ export async function analyzePullRequest(
       findings: response.analysis.findings.map((finding) => ({
         source: finding.source_type ?? (finding.category.startsWith("ai_") ? "ai" : "rule"),
         category: finding.category,
+        severity: finding.severity,
         title: finding.title,
         explanation: finding.explanation,
         evidence: finding.evidence,
+        recommended_action: finding.recommended_action,
+        confidence: finding.confidence,
         overlap_similarity: finding.overlap_similarity,
       })),
-      uncertainty: response.analysis.summary.limitations ?? [],
+      uncertainty: [
+        ...(response.analysis.summary.limitations ?? []),
+        ...(response.analysis.summary.ai_limitations ?? []),
+      ],
+      ai_summary: response.analysis.summary.ai_summary,
       ai_enabled: response.analysis.summary.ai_enabled,
       ai_status: response.analysis.ai_status,
       ai_error: response.analysis.ai_error,
@@ -184,5 +227,21 @@ export async function analyzePullRequest(
       guideline_path: response.analysis.guideline_path,
       is_sample: response.is_sample,
     },
+  }
+}
+
+export async function reviewPullRequest(
+  repository: DashboardRepository,
+  pull: PullRequestSummary,
+): Promise<QualityPullAnalysis> {
+  const result = await requestJson<PRQualityResult>("/api/analyze-pr", {
+    owner: repository.owner,
+    repo: repository.repo,
+    number: pull.number,
+  })
+  return {
+    result,
+    repository: repository.metadata,
+    pull,
   }
 }

@@ -69,6 +69,28 @@ function renderDashboard() {
   return render(<ThemeProvider><BrowserRouter><DashboardPage /></BrowserRouter></ThemeProvider>)
 }
 
+function qualityResponse(number: number, extra: Record<string, unknown> = {}) {
+  return {
+    verdict: "genuine",
+    score: 82,
+    confidence: "medium",
+    summary: "A focused contribution with useful changes.",
+    reasons: ["Updates source code."],
+    red_flags: [],
+    green_flags: ["Includes a focused change."],
+    heuristic_score: 77,
+    signals: { trivial_change: false },
+    source: "heuristic",
+    model: "heuristic-v1",
+    cached: false,
+    owner: "acme",
+    repo: "project",
+    number,
+    head_sha: "fixture-head-sha",
+    ...extra,
+  }
+}
+
 describe("dashboard result grouping and evidence", () => {
   it("merges six overlap findings into one group with unique pull requests", () => {
     const grouped = groupFindings(
@@ -176,7 +198,7 @@ describe("dashboard result grouping and evidence", () => {
     expect(screen.getByText("The AI returned a response PRism could not validate; it was discarded.")).toBeInTheDocument()
     analysis.result.ai_error = "unreachable"
     rerender(<ResultsPanel analysis={analysis} pulls={pulls} />)
-    expect(screen.getByText("AI analysis unavailable: Ollama could not be reached.")).toBeInTheDocument()
+    expect(screen.getByText("AI analysis is temporarily unavailable from the hosted provider. Rule-based results only.")).toBeInTheDocument()
 
     analysis.result.guideline_status = "not_found"
     rerender(<ResultsPanel analysis={analysis} pulls={pulls} />)
@@ -222,16 +244,13 @@ describe("dashboard repository flow", () => {
     window.localStorage.removeItem("prism-theme")
   })
 
-  it("disables AI when the service status endpoint reports Ollama unavailable", async () => {
+  it("shows heuristic-only mode when no hosted provider is configured", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ status: "ok", ai_available: false }),
     }))
     renderDashboard()
-    const checkbox = await screen.findByRole("checkbox", { name: /AI analysis/i })
-    await waitFor(() => expect(checkbox).toBeDisabled())
-    expect(checkbox).not.toBeChecked()
-    expect(screen.getByText("AI analysis is unavailable here. Rule-based results only.")).toBeInTheDocument()
+    expect(await screen.findByText("AI providers are not configured. PRs will use heuristic-only results.")).toBeInTheDocument()
   })
 
   it("shows bundled sample mode without making repository or analysis requests", async () => {
@@ -260,17 +279,14 @@ describe("dashboard repository flow", () => {
         pulls: pulls.slice(0, 2), guidelines: [], guideline_status: "not_found", sample_mode: false,
       }) } as Response
       const body = JSON.parse(String(init?.body ?? "{}"))
-      return { ok: true, json: async () => ({ repository: "acme/project", is_sample: false,
-        analysis: { pull_request: body.pull_number, status: "NEEDS_REVIEW", category: body.pull_number === 1 ? "Needs review" : "Likely legitimate", findings: [], summary: { limitations: [], ai_enabled: false }, ai_status: "disabled", guideline_status: "not_found" },
-        changed_files: [], files_truncated: false, comparison: { compared: 1, available: 1 },
-      }) } as Response
+      return { ok: true, json: async () => qualityResponse(body.number, { verdict: body.number === 1 ? "low_quality" : "genuine" }) } as Response
     }))
     renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     await screen.findByRole("heading", { name: "Open pull requests" })
     fireEvent.click(screen.getByRole("row", { name: /#1 Current change/ }))
-    await screen.findByRole("heading", { name: "Review signals" })
+    await screen.findByRole("heading", { name: "Current change" })
     fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "Needs review" } })
     expect(screen.getByRole("row", { name: /#1 Current change/ })).toBeInTheDocument()
     expect(screen.queryByRole("row", { name: /#2 Related change/ })).not.toBeInTheDocument()
@@ -285,8 +301,8 @@ describe("dashboard repository flow", () => {
         return { ok: true, json: async () => ({ status: "ok", ai_available: false }) } as Response
       }
       const body = JSON.parse(String(init?.body ?? "{}"))
-      requestedUrls.push(body.url)
       if (path === "/api/repository") {
+        requestedUrls.push(body.url)
         return {
           ok: true,
           json: async () => ({
@@ -300,25 +316,10 @@ describe("dashboard repository flow", () => {
           }),
         } as Response
       }
-      requestedPulls.push(body.pull_number)
+      requestedPulls.push(body.number)
       return {
         ok: true,
-        json: async () => ({
-          repository: "acme/project",
-          is_sample: false,
-          analysis: {
-            pull_request: body.pull_number,
-            status: "CONSISTENT_WITH_AVAILABLE_CHECKS",
-            category: "Likely legitimate",
-            findings: [],
-            summary: { limitations: [], ai_enabled: false },
-            ai_status: "disabled",
-            guideline_status: "not_found",
-          },
-          changed_files: [],
-          files_truncated: false,
-          comparison: { compared: 1, available: 1 },
-        }),
+        json: async () => qualityResponse(body.number),
       } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
@@ -334,7 +335,7 @@ describe("dashboard repository flow", () => {
     const secondRow = screen.getByRole("row", { name: /#2 Related change 2/ })
     fireEvent.click(secondRow)
     await waitFor(() => expect(requestedPulls).toEqual([2]))
-    expect(requestedUrls).toEqual(["https://github.com/acme/project", "https://github.com/acme/project"])
+    expect(requestedUrls).toEqual(["https://github.com/acme/project"])
     expect(within(secondRow).getByText("Draft")).toBeInTheDocument()
   })
 
@@ -352,14 +353,10 @@ describe("dashboard repository flow", () => {
         }),
       } as Response
       const body = JSON.parse(String(init?.body ?? "{}"))
-      requestedPulls.push(body.pull_number)
+      requestedPulls.push(body.number)
       return {
         ok: true,
-        json: async () => ({
-          repository: "acme/project", is_sample: false,
-          analysis: { pull_request: body.pull_number, status: "CONSISTENT_WITH_AVAILABLE_CHECKS", category: "Likely legitimate", findings: [], summary: { limitations: [], ai_enabled: false }, ai_status: "disabled", guideline_status: "not_found" },
-          changed_files: [], files_truncated: false, comparison: { compared: 0, available: 0 },
-        }),
+        json: async () => qualityResponse(body.number),
       } as Response
     }))
     renderDashboard()
@@ -368,6 +365,34 @@ describe("dashboard repository flow", () => {
     await screen.findAllByText("Likely legitimate")
     expect(requestedPulls).toEqual([1])
   })
+
+  it("analyzes all pull requests one at a time with the configured 2.5 second gap", async () => {
+    const requested: number[] = []
+    const delay = vi.spyOn(window, "setTimeout")
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path === "/api/status") return { ok: true, json: async () => ({ ai_available: false }) } as Response
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      if (path === "/api/repository") return { ok: true, json: async () => ({
+        owner: "acme", repo: "project", metadata: { full_name: "acme/project", html_url: "https://github.com/acme/project" },
+        pulls: pulls.slice(0, 3), guidelines: [], guideline_status: "not_found", sample_mode: false,
+      }) } as Response
+      requested.push(body.number)
+      return { ok: true, json: async () => qualityResponse(body.number) } as Response
+    }))
+    renderDashboard()
+    fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
+    await screen.findByRole("heading", { name: "Open pull requests" })
+    fireEvent.click(screen.getByRole("row", { name: /#1 Current change/ }))
+    await screen.findByText("Analysis source: Heuristic fallback (heuristic-v1)")
+    expect(screen.getByText("Reasons to review").closest("details")).not.toHaveAttribute("open")
+    fireEvent.click(screen.getByText("Reasons to review"))
+    expect(await screen.findByText("Updates source code.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Analyze all PRs" }))
+    await waitFor(() => expect(requested).toEqual([1, 2, 3]), { timeout: 8000 })
+    expect(delay).toHaveBeenCalledWith(expect.any(Function), 2500)
+  }, 10000)
 
   it("keeps a failed row local and allows another PR to be analyzed", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -382,22 +407,14 @@ describe("dashboard repository flow", () => {
           pulls: pulls.slice(0, 3), guidelines: [], guideline_status: "not_found", sample_mode: false,
         }),
       } as Response
-      if (body.pull_number === 2) return {
+      if (body.number === 2) return {
         ok: false,
         status: 502,
         json: async () => ({ detail: "Temporary service failure" }),
       } as Response
       return {
         ok: true,
-        json: async () => ({
-          repository: "acme/project", is_sample: false,
-          analysis: {
-            pull_request: 3, status: "CONSISTENT_WITH_AVAILABLE_CHECKS", category: "Likely legitimate",
-            findings: [], summary: { limitations: [], ai_enabled: false }, ai_status: "disabled",
-            guideline_status: "not_found",
-          },
-          changed_files: [], files_truncated: false, comparison: { compared: 2, available: 2 },
-        }),
+        json: async () => qualityResponse(body.number),
       } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
@@ -424,12 +441,9 @@ describe("dashboard repository flow", () => {
         owner: "acme", repo: "project", metadata: { full_name: "acme/project", html_url: "https://github.com/acme/project" },
         pulls: pulls.slice(0, 3), guidelines: [], guideline_status: "not_found", sample_mode: false,
       }) } as Response
-      requested.push(body.pull_number)
-      if (body.pull_number === 2) return await new Promise<Response>((resolve) => { finishFirst = resolve })
-      return { ok: true, json: async () => ({ repository: "acme/project", is_sample: false,
-        analysis: { pull_request: body.pull_number, status: "CONSISTENT_WITH_AVAILABLE_CHECKS", category: "Likely legitimate", findings: [], summary: { limitations: [], ai_enabled: false }, ai_status: "disabled", guideline_status: "not_found" },
-        changed_files: [], files_truncated: false, comparison: { compared: 2, available: 2 },
-      }) } as Response
+      requested.push(body.number)
+      if (body.number === 2) return await new Promise<Response>((resolve) => { finishFirst = resolve })
+      return { ok: true, json: async () => qualityResponse(body.number) } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
     renderDashboard()

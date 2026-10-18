@@ -5,17 +5,15 @@ import { ThemeToggle } from "../ThemeToggle"
 import { footerLinks, LANDING_PATH, sectionNavNames, trialCopy } from "../landing/content"
 import { SampleResultCard, validRepositoryUrl } from "../landing/sections/TrialSection"
 import {
-  analyzePullRequest,
   checkServiceStatus,
   fetchRepository,
-  type DashboardAnalysisResult,
+  reviewPullRequest,
   type DashboardRepository,
   type DashboardSettings,
-  type PullAnalysis,
+  type QualityPullAnalysis,
   type PullRequestSummary,
 } from "./api"
-import { ResultsPanel } from "./ResultsPanel"
-import { categoryForAnalysis, groupFindings } from "./results"
+import { PRReviewPanel } from "./PRReviewPanel"
 import "./dashboard.css"
 
 function repoFromQuery(): string {
@@ -27,8 +25,12 @@ function repoFromQuery(): string {
   }
 }
 
-function visibleFindingCount(result: DashboardAnalysisResult, pulls: PullRequestSummary[]) {
-  return groupFindings(result.findings, pulls, result.pr_number).findings.length
+function qualityCategory(analysis: QualityPullAnalysis) {
+  switch (analysis.result.verdict) {
+    case "genuine": return { label: "Likely legitimate", tone: "good" }
+    case "low_quality": return { label: "Needs review", tone: "review" }
+    case "spam": return { label: "Potentially suspicious", tone: "caution" }
+  }
 }
 
 export default function DashboardPage() {
@@ -38,21 +40,19 @@ export default function DashboardPage() {
   const [repoUrl, setRepoUrl] = useState(repoFromQuery)
   const [settings, setSettings] = useState<DashboardSettings>({
     pr_limit: 10,
-    ai_enabled: false,
-    model_name: "",
     sample_mode: false,
   })
   const [message, setMessage] = useState("")
   const [repository, setRepository] = useState<DashboardRepository | null>(null)
-  const [loadedRepositoryUrl, setLoadedRepositoryUrl] = useState("")
-  const [analyses, setAnalyses] = useState<Record<number, PullAnalysis>>({})
+  const [analyses, setAnalyses] = useState<Record<number, QualityPullAnalysis>>({})
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [selectedPullNumber, setSelectedPullNumber] = useState<number | null>(null)
   const [isFetchingRepository, setIsFetchingRepository] = useState(false)
   const [analyzingNumber, setAnalyzingNumber] = useState<number | null>(null)
   const [queuedNumbers, setQueuedNumbers] = useState<number[]>([])
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const [aiAvailable, setAiAvailable] = useState(false)
+  const [providerStatus, setProviderStatus] = useState({ groq: false, gemini: false })
+  const [analyzeAllRunning, setAnalyzeAllRunning] = useState(false)
   const analysisQueue = useRef<Promise<void>>(Promise.resolve())
   const activeAnalysis = useRef<number | null>(null)
   const queuedAnalysis = useRef(new Set<number>())
@@ -60,8 +60,8 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true
     void checkServiceStatus()
-      .then((status) => { if (active) setAiAvailable(status.ai_available === true) })
-      .catch(() => { if (active) setAiAvailable(false) })
+      .then((status) => { if (active) setProviderStatus({ groq: status.groq_configured, gemini: status.gemini_configured }) })
+      .catch(() => { if (active) setProviderStatus({ groq: false, gemini: false }) })
     return () => { active = false }
   }, [])
 
@@ -69,7 +69,6 @@ export default function DashboardPage() {
   useEffect(() => {
     setMessage("")
     setRepository(null)
-    setLoadedRepositoryUrl("")
     setAnalyses({})
     setRowErrors({})
     setSelectedPullNumber(null)
@@ -104,7 +103,6 @@ export default function DashboardPage() {
   const analyzePull = useCallback(async (
     repo: DashboardRepository,
     pull: PullRequestSummary,
-    repositoryUrl = repoUrl,
   ) => {
     setSelectedPullNumber(pull.number)
     setMessage("")
@@ -118,7 +116,7 @@ export default function DashboardPage() {
       setQueuedNumbers((current) => current.filter((number) => number !== pull.number))
       setAnalyzingNumber(pull.number)
       try {
-        const detail = await analyzePullRequest(repositoryUrl, pull, settings)
+        const detail = await reviewPullRequest(repo, pull)
         setAnalyses((current) => ({ ...current, [pull.number]: detail }))
       } catch (error) {
         setRowErrors((current) => ({
@@ -131,7 +129,7 @@ export default function DashboardPage() {
       }
     })
     await analysisQueue.current
-  }, [repoUrl, settings])
+  }, [])
 
   const analyzeRepositoryForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -144,7 +142,6 @@ export default function DashboardPage() {
     setRepoUrl(normalized)
     if (settings.sample_mode) {
       setRepository(null)
-      setLoadedRepositoryUrl("")
       setAnalyses({})
       setRowErrors({})
       setSelectedPullNumber(null)
@@ -160,14 +157,13 @@ export default function DashboardPage() {
       setSelectedPullNumber(null)
       setCategoryFilter("all")
       setRepository(fetched)
-      setLoadedRepositoryUrl(normalized)
       if (fetched.pulls.length === 0) {
         setMessage(`${fetched.metadata.full_name} has no open pull requests to review.`)
         return
       }
       if (fetched.pulls.length === 1) {
         setSelectedPullNumber(fetched.pulls[0].number)
-        await analyzePull(fetched, fetched.pulls[0], normalized)
+        await analyzePull(fetched, fetched.pulls[0])
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The repository request failed. Please try again.")
@@ -178,7 +174,23 @@ export default function DashboardPage() {
 
   const selectPull = (pull: PullRequestSummary) => {
     setSelectedPullNumber(pull.number)
-    if (!analyses[pull.number] && repository) void analyzePull(repository, pull, loadedRepositoryUrl || repoUrl)
+    if (!analyses[pull.number] && repository) void analyzePull(repository, pull)
+  }
+
+  const analyzeAllPulls = async () => {
+    if (!repository || analyzeAllRunning) return
+    setAnalyzeAllRunning(true)
+    try {
+      for (const [index, pull] of repository.pulls.entries()) {
+        if (analyses[pull.number]) continue
+        await analyzePull(repository, pull)
+        if (index < repository.pulls.length - 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2500))
+        }
+      }
+    } finally {
+      setAnalyzeAllRunning(false)
+    }
   }
 
   const selectPullByKey = (event: KeyboardEvent<HTMLTableRowElement>, pull: PullRequestSummary) => {
@@ -257,34 +269,23 @@ export default function DashboardPage() {
                 onChange={(event) => {
                   updateSetting("pr_limit", Math.max(1, Math.min(30, Number(event.target.value) || 1)))
                   setRepository(null)
-                  setLoadedRepositoryUrl("")
                   clearFetchedResult()
                 }}
               />
               <small>1–30 pull requests</small>
             </label>
-            <label className="dashboard-field" htmlFor="dashboard-model">
-              <span>Model name</span>
-              <input id="dashboard-model" type="text" value={settings.model_name} placeholder="Optional local model" onChange={(event) => { updateSetting("model_name", event.target.value); clearFetchedResult() }} />
-              <small>Used only when AI is enabled</small>
-            </label>
-            <label className="dashboard-toggle" htmlFor="dashboard-ai">
-              <input
-                id="dashboard-ai"
-                type="checkbox"
-                checked={settings.ai_enabled && aiAvailable}
-                disabled={!aiAvailable}
-                onChange={(event) => {
-                  updateSetting("ai_enabled", event.target.checked)
-                  setMessage("")
-                  clearFetchedResult()
-                }}
-              />
+            <div className="dashboard-ai-provider" role="status">
+              <strong>AI review</strong>
               <span>
-                <strong>AI analysis</strong>
-                <small>{aiAvailable ? "Optional · uses configured local Ollama service" : "AI analysis is unavailable here. Rule-based results only."}</small>
+                {providerStatus.groq && providerStatus.gemini
+                  ? "Groq is configured as primary; Gemini Gemma is configured as fallback."
+                  : providerStatus.groq
+                    ? "Groq is configured as primary; no Gemini fallback is configured."
+                    : providerStatus.gemini
+                      ? "Groq is not configured; Gemini Gemma is available as the configured provider."
+                      : "AI providers are not configured. PRs will use heuristic-only results."}
               </span>
-            </label>
+            </div>
             <label className="dashboard-toggle" htmlFor="dashboard-sample">
               <input type="checkbox" id="dashboard-sample" checked={settings.sample_mode} onChange={(event) => updateSetting("sample_mode", event.target.checked)} />
               <span><strong>Sample mode</strong><small>Show bundled example content</small></span>
@@ -311,6 +312,9 @@ export default function DashboardPage() {
             {repository.sample_mode && <p className="dashboard-sample-banner">SAMPLE DATA, not a live analysis</p>}
             <div className="dashboard-pr-controls">
               <p className="dashboard-pr-instruction">Select a pull request to analyze it.</p>
+              <button type="button" className="dashboard-row-analyze" onClick={() => void analyzeAllPulls()} disabled={analyzeAllRunning || analyzingNumber !== null}>
+                {analyzeAllRunning ? "Analyzing sequentially…" : "Analyze all PRs"}
+              </button>
               <label htmlFor="dashboard-category-filter">Filter by category</label>
               <select id="dashboard-category-filter" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
                 <option value="all">All pull requests</option>
@@ -321,14 +325,14 @@ export default function DashboardPage() {
             </div>
             <table className="dashboard-pr-table">
               <thead>
-                <tr><th scope="col">Pull request</th><th scope="col">Author</th><th scope="col">Category</th><th scope="col">Findings</th><th scope="col">Link</th></tr>
+                <tr><th scope="col">Pull request</th><th scope="col">Author</th><th scope="col">Category</th><th scope="col">Signals</th><th scope="col">Link</th></tr>
               </thead>
               <tbody>
-                {repository.pulls.filter((pull) => categoryFilter === "all" || analyses[pull.number]?.result.category === categoryFilter).map((pull) => {
+                {repository.pulls.filter((pull) => categoryFilter === "all" || (analyses[pull.number] && qualityCategory(analyses[pull.number]).label === categoryFilter)).map((pull) => {
                   const detail = analyses[pull.number]
                   const rowError = rowErrors[pull.number]
-                  const count = detail ? visibleFindingCount(detail.result, repository.pulls) : null
-                  const category = detail ? categoryForAnalysis(detail) : null
+                  const count = detail ? Object.values(detail.result.signals).filter((value) => value === true).length : null
+                  const category = detail ? qualityCategory(detail) : null
                   return (
                     <tr
                       key={pull.number}
@@ -352,11 +356,10 @@ export default function DashboardPage() {
                         ) : detail ? (
                           <span className={`dashboard-pr-category ${category?.tone}`}>
                             {category?.label}
-                            {category?.reason && <small>{category.reason}</small>}
                           </span>
                         ) : <span className="dashboard-pr-category unanalyzed">Not analyzed</span>}
                       </td>
-                      <td data-label="Findings">
+                      <td data-label="Signals">
                         {count === null ? "—" : count}
                       </td>
                       <td data-label="Link">
@@ -366,7 +369,7 @@ export default function DashboardPage() {
                             className="dashboard-row-analyze"
                             onClick={(event) => { event.stopPropagation(); selectPull(pull) }}
                           >
-                            {analyzingNumber === pull.number ? "Analyzing…" : queuedNumbers.includes(pull.number) ? "Queued…" : rowError ? "Retry" : detail ? "Analyzed" : "Analyze"}
+                            {analyzingNumber === pull.number ? <><span className="dashboard-spinner" aria-hidden="true" /> Analyzing…</> : queuedNumbers.includes(pull.number) ? "Queued…" : rowError ? "Retry" : detail ? "Analyzed" : "Analyze"}
                           </button>
                           <a className="dashboard-pr-link" href={pull.html_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
                             View PR ↗
@@ -386,7 +389,7 @@ export default function DashboardPage() {
           analyzingNumber === selectedPullNumber ? (
             <p className="dashboard-analysis-loading" role="status">Analyzing PR #{selectedPullNumber}…</p>
           ) : selectedAnalysis && repository ? (
-            <ResultsPanel analysis={selectedAnalysis} pulls={repository.pulls} />
+            <PRReviewPanel analysis={selectedAnalysis} />
           ) : null
         )}
       </section>

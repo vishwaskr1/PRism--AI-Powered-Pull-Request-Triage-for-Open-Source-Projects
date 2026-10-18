@@ -1,9 +1,8 @@
-from prism.ai.ollama_client import OllamaProvider
 from prism.analysis.evidence_builder import validate_finding
 from prism.analysis.guideline_checks import check_guidelines
 from prism.analysis.orchestrator import analyze_pull_request
 from prism.config import Settings
-from prism.exceptions import InvalidRepositoryURL, OllamaUnavailable
+from prism.exceptions import AIProviderUnavailable, InvalidRepositoryURL
 from prism.github.client import parse_repository_url
 from prism.models import (
     ChangedFile,
@@ -27,11 +26,13 @@ def pull(number=1, files=None, title="Update parser"):
 
 def test_defaults_work_without_optional_services():
     assert Settings().github_token is None
-    assert Settings().ollama_model is None
+    assert Settings().groq_api_key is None
+    assert Settings().gemini_api_key is None
 
 
-def test_configuration_rejects_remote_ollama_and_invalid_limits():
-    for values in ({"ollama_base_url": "https://example.com"}, {"max_pull_requests": 0}):
+def test_provider_keys_are_optional_and_invalid_limits_are_rejected():
+    assert Settings(groq_api_key="groq_example").groq_api_key == "groq_example"
+    for values in ({"request_timeout_seconds": 0}, {"max_pull_requests": 0}):
         try:
             Settings(**values)
         except ValueError:
@@ -217,21 +218,11 @@ def test_ai_failure_keeps_rule_analysis_and_adds_a_limitation():
 
     class UnavailableAI:
         def analyze_pr(self, pull_request, guidelines):
-            raise OllamaUnavailable("local fixture unavailable")
+            raise AIProviderUnavailable("hosted fixture unavailable")
 
     result = AnalysisService(FixtureGitHubClient(), UnavailableAI()).analyze(
         "a", "b", pull(), [pull()], [], ai_enabled=True
     )
     assert result.summary.ai_enabled is False
     assert result.summary.limitations
-    assert "Ollama/AI analysis unavailable" in result.summary.limitations[-1]
-
-
-def test_ollama_unavailability_is_a_safe_optional_error():
-    provider = OllamaProvider("http://127.0.0.1:1", "not-installed", timeout=0.1)
-    try:
-        provider.analyze({"sources": {}})
-    except OllamaUnavailable:
-        pass
-    else:
-        raise AssertionError("Unavailable local model should be reported")
+    assert "hosted provider" in result.summary.limitations[-1]

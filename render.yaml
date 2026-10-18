@@ -22,5 +22,10 @@ services:
         value: "600"
       - key: PRISM_MAX_COMPARISON_PRS
         value: "10"
+      # Add keys from provider accounts with free-tier access; never put values in this file.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: GITHUB_TOKEN
         sync: false

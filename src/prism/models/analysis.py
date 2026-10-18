@@ -16,7 +16,9 @@ class ReviewStatus(str, Enum):
 
 ReviewCategory = Literal["Likely legitimate", "Needs review", "Potentially suspicious"]
 AIStatus = Literal["completed", "failed", "disabled"]
-AIError = Literal["timeout", "invalid_output", "unreachable"]
+AIError = Literal[
+    "timeout", "invalid_output", "unreachable", "rate_limited", "billing_required", "auth_required"
+]
 GuidelineStatus = Literal["found", "not_found", "retrieval_failed"]
 
 
@@ -24,6 +26,8 @@ class AnalysisSummary(BaseModel):
     total_findings: int = 0
     limitations: List[str] = []
     ai_enabled: bool = False
+    ai_summary: Optional[str] = None
+    ai_limitations: List[str] = []
 
 
 class AnalysisResult(BaseModel):

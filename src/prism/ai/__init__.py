@@ -1,1 +1,1 @@
-"""Optional local model integration."""
+"""Optional AI provider integrations."""

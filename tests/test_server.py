@@ -72,6 +72,124 @@ def test_analyze_endpoint_is_rate_limited_per_ip(monkeypatch):
     server._rate_buckets.clear()
 
 
+def test_analyze_pr_endpoint_caches_by_head_sha(monkeypatch):
+    server._rate_buckets.clear()
+    server._pr_review_cache.clear()
+
+    class FixtureClient:
+        calls = []
+
+        def pull_request_data(self, owner, repo, number):
+            self.calls.append("pull")
+            return {
+                "head": {"sha": "fixture-sha"},
+                "user": {"login": "maintainer"},
+            }
+
+        def pull_request_files_data(self, owner, repo, number):
+            self.calls.append("files")
+            return []
+
+        def pull_request_commits(self, owner, repo, number):
+            self.calls.append("commits")
+            return []
+
+        def user_profile(self, login):
+            self.calls.append("user")
+            return {"login": login}
+
+        def close(self):
+            pass
+
+    client = FixtureClient()
+    monkeypatch.setattr(server, "_get_client", lambda: client)
+    monkeypatch.setattr(
+        server,
+        "analyze_pr_review",
+        lambda **kwargs: {
+            "verdict": "genuine",
+            "score": 80,
+            "confidence": "medium",
+            "summary": "A useful change.",
+            "reasons": ["Adds source code."],
+            "red_flags": [],
+            "green_flags": ["Includes a focused fix."],
+            "heuristic_score": 75,
+            "signals": {"trivial_change": False},
+            "source": "heuristic",
+            "model": "heuristic-v1",
+        },
+    )
+
+    api = TestClient(server.app)
+    first = api.post("/api/analyze-pr", json={"owner": "example", "repo": "project", "number": 4})
+    second = api.post("/api/analyze-pr", json={"owner": "example", "repo": "project", "number": 4})
+    assert first.status_code == 200
+    assert first.json()["source"] == "heuristic"
+    assert first.json()["cached"] is False
+    assert second.json()["cached"] is True
+    assert client.calls == ["pull", "files", "commits", "user", "pull"]
+    server._pr_review_cache.clear()
+
+
+def test_analyze_pr_rejects_invalid_repository_components():
+    response = TestClient(server.app).post(
+        "/api/analyze-pr", json={"owner": "owner/evil", "repo": "repo", "number": 1}
+    )
+    assert response.status_code == 422
+
+
+def test_analyze_pr_endpoint_is_rate_limited(monkeypatch):
+    server._rate_buckets.clear()
+    server._pr_review_cache.clear()
+
+    class FixtureClient:
+        def pull_request_data(self, owner, repo, number):
+            return {"head": {"sha": "rate-limit-sha"}, "user": {"login": "author"}}
+
+        def pull_request_files_data(self, owner, repo, number):
+            return []
+
+        def pull_request_commits(self, owner, repo, number):
+            return []
+
+        def user_profile(self, login):
+            return None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(server, "_get_client", lambda: FixtureClient())
+    monkeypatch.setattr(
+        server,
+        "analyze_pr_review",
+        lambda **kwargs: {
+            "verdict": "low_quality",
+            "score": 45,
+            "confidence": "low",
+            "summary": "Heuristic result.",
+            "reasons": [],
+            "red_flags": [],
+            "green_flags": [],
+            "heuristic_score": 45,
+            "signals": {},
+            "source": "heuristic",
+            "model": "heuristic-v1",
+        },
+    )
+    monkeypatch.setattr(server.settings, "rate_limit_requests", 1)
+    client = TestClient(server.app)
+    body = {"owner": "example", "repo": "project", "number": 9}
+    first = client.post("/api/analyze-pr", json=body)
+    second = client.post("/api/analyze-pr", json=body)
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.headers.get("retry-after")
+    monkeypatch.setattr(server.settings, "rate_limit_requests", 20)
+    server._rate_buckets.clear()
+    server._pr_review_cache.clear()
+
+
 def test_forwarded_ip_is_trusted_only_when_configured(monkeypatch):
     client = TestClient(server.app)
     monkeypatch.setattr(server.settings, "rate_limit_requests", 1)
@@ -119,3 +237,32 @@ def test_sample_analysis_returns_ai_and_guideline_status_fields():
         "Needs review",
         "Potentially suspicious",
     }
+
+
+def test_ai_status_reports_provider_key_availability_without_calling_provider(monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "get_settings",
+        lambda: server.settings.model_copy(
+            update={
+                "groq_api_key": None,
+                "gemini_api_key": None,
+            }
+        ),
+    )
+    response = TestClient(server.app).get("/api/status")
+    assert response.status_code == 200
+    assert response.json()["ai_available"] is False
+
+    monkeypatch.setattr(
+        server,
+        "get_settings",
+        lambda: server.settings.model_copy(
+            update={
+                "groq_api_key": "groq_fixture",
+                "gemini_api_key": None,
+            }
+        ),
+    )
+    response = TestClient(server.app).get("/api/status")
+    assert response.json()["ai_available"] is True

@@ -130,10 +130,11 @@ export function summaryForAnalysis(analysis: PullAnalysis, grouped: GroupedFindi
     ? `${countLabel}: possible overlap with ${overlap.overlapRows?.length ?? 0} other open PR${(overlap.overlapRows?.length ?? 0) === 1 ? "" : "s"}.`
     : countLabel + "."
   if (analysis.result.ai_status === "completed") {
-    const hasAiFinding = analysis.result.findings.some((finding) => finding.source === "ai")
-    return [lead, hasAiFinding
-      ? "AI suggestions with validated evidence are included."
-      : "AI analysis completed; no AI findings passed evidence validation."]
+    return [lead, analysis.result.ai_summary?.trim() || (
+      analysis.result.findings.some((finding) => finding.source === "ai")
+        ? "AI suggestions with validated evidence are included."
+        : "AI analysis completed; no AI findings passed evidence validation."
+    )]
   }
   if (analysis.result.ai_status === "failed") return [lead]
   return [lead, "Rule-based checks only."]
@@ -164,7 +165,6 @@ export function uncertaintyForAnalysis(analysis: PullAnalysis): string[] {
   }
 
   for (const limitation of analysis.result.uncertainty) {
-    if (/^Ollama\/AI analysis unavailable\./i.test(limitation)) continue
     if (/comparison pull requests were capped/i.test(limitation)) continue
     if (/changed-file list was truncated/i.test(limitation)) {
       messages.add("The changed-file list reached its configured retrieval limit.")

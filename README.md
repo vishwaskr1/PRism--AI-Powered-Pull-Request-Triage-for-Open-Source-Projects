@@ -23,7 +23,7 @@
   PRism brings public pull requests, repository guidance, deterministic checks, and evidence-linked review signals into one read-only workspace.
 </p>
 
-Accounts, database persistence, private-repository access, GitHub write actions, code execution, and paid or cloud AI are outside the current MVP scope.
+Accounts, database persistence, private-repository access, GitHub write actions, and code execution are outside the current MVP scope. Hosted AI is optional and explicitly disabled unless an operator configures it.
 
 ## 📑 Table of Contents
 
@@ -32,7 +32,7 @@ Accounts, database persistence, private-repository access, GitHub write actions,
   - [Triage Dashboard](#triage-dashboard)
   - [Evidence and Uncertainty](#evidence-and-uncertainty)
   - [Deterministic Checks](#deterministic-checks)
-  - [Optional Local AI](#optional-local-ai)
+  - [Optional Hosted AI](#optional-hosted-ai)
   - [Sample Mode](#sample-mode)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
@@ -91,14 +91,16 @@ Current rule checks include:
 
 | Rule findings | AI findings |
 | --- | --- |
-| Produced by deterministic checks over retrieved repository, pull-request, guideline, and changed-file data. | Optional structured suggestions from a locally configured Ollama service. |
-| Do not require an AI service. Evidence is checked against the retrieved source. | Must cite retrieved sources; evidence is validated before an AI finding is included. |
+| Produced by deterministic checks over retrieved repository, pull-request, guideline, and changed-file data. | Optional PR-quality review from Groq, with a Gemini Gemma fallback when configured. |
+| Do not require an AI service. Evidence is checked against the retrieved source. | Must return schema-valid JSON. Treat the model result as advisory and verify it against the PR yourself. |
 | Continue to work when AI is off or unavailable. | May fail, be unavailable, or have its unsupported output discarded. |
 
-<a id="optional-local-ai"></a>
-### 🧠 Optional Local AI
+<a id="optional-hosted-ai"></a>
+### 🧠 Optional Hosted AI
 
-AI is optional and defaults to off. When enabled, PRism sends bounded PR context and retrieved guidance to the configured **local Ollama HTTP service**. AI suggestions are advisory and use the same evidence validation as rule findings. The hosted Render blueprint does not install or configure Ollama, so AI is unavailable on that deployment unless its environment is deliberately changed to provide a trusted local service.
+PR quality review uses Groq `openai/gpt-oss-20b` as its primary provider. If Groq fails, PRism tries Gemma 4 `gemma-4-26b-a4b-it` through Gemini only when `GEMINI_API_KEY` is configured. Provider calls are server-side, sequential, limited to 30 seconds, and receive bounded PR metadata and source-first diff text (up to 12,000 characters). Model output must match a strict JSON schema. If no key is configured or both providers fail, PRism returns a heuristic-only result.
+
+Provider usage may incur charges and quotas vary by account. Check the provider consoles before adding credentials. An absent key means no call to that provider; `/api/status` checks configuration only and does not test connectivity or quota.
 
 <a id="sample-mode"></a>
 ### 🧪 Sample Mode
@@ -117,9 +119,13 @@ flowchart LR
     API --> ANALYSIS["Analysis service"]
     GUIDE --> RULES["Deterministic checks"]
     ANALYSIS --> RULES
-    ANALYSIS -. optional .-> OLLAMA["Local Ollama"]
+    ANALYSIS -. primary .-> GROQ["Groq: gpt-oss-20b"]
+    GROQ -. on failure, if configured .-> GEMINI["Gemini API: Gemma 4"]
+    GROQ -. unavailable .-> HEURISTIC["Heuristic fallback"]
+    GEMINI -. unavailable .-> HEURISTIC
     RULES --> VALIDATE["Evidence validation"]
-    OLLAMA -. structured suggestions .-> VALIDATE
+    GROQ -. schema-validated response .-> VALIDATE
+    GEMINI -. schema-validated response .-> VALIDATE
     VALIDATE --> TRIAGE["Category and uncertainty"]
     TRIAGE --> UI
 ~~~
@@ -134,7 +140,7 @@ The GitHub client constructs requests against the fixed <code>api.github.com</co
 | Frontend | React 19, React DOM 19, TypeScript 5.7+, Vite 8, GSAP, Three.js |
 | Backend | Python 3.9+, FastAPI, Uvicorn, HTTPX, Pydantic, python-dotenv |
 | Quality and delivery | pytest, Ruff, Vitest, Testing Library, TypeScript |
-| Optional AI | No added package dependency; Ollama is an external local HTTP service |
+| Optional AI | OpenAI SDK for Groq and Google Gen AI SDK for Gemini fallback |
 
 <a id="getting-started"></a>
 ## 🚀 Getting Started
@@ -147,7 +153,8 @@ The GitHub client constructs requests against the fixed <code>api.github.com</co
 | Node.js | 20.19+ or 22.12+ | <code>node --version</code> |
 | Git | Installed | <code>git --version</code> |
 | Docker (optional) | Docker Engine | <code>docker --version</code> |
-| Ollama (optional, local AI) | Installed locally with a model | <code>ollama --version</code> |
+| Groq API key (optional hosted AI) | Server-side Groq API key | Configure only when enabling hosted review |
+| Gemini API key (optional fallback) | Server-side Google Gemini API key | Optional; called only if Groq fails |
 
 ### Fast Setup with Docker
 
@@ -235,7 +242,7 @@ Open the URL printed by Vite. The development server proxies <code>/api</code> c
 ├── PRism_PRD.md                      # Product requirements
 ├── README.md                         # Project guide
 ├── docs/
-│   ├── AI_DESIGN.md                  # Local AI design and boundaries
+│   ├── AI_DESIGN.md                  # Hosted AI design and boundaries
 │   ├── API_INTEGRATION.md            # GitHub API integration
 │   ├── ARCHITECTURE.md               # System design
 │   ├── EVALUATION.md                 # Evaluation protocol and status
@@ -262,6 +269,7 @@ Open the URL printed by Vite. The development server proxies <code>/api</code> c
 │   ├── vite-env.d.ts                 # Vite environment typing
 │   ├── dashboard/
 │   │   ├── DashboardPage.tsx         # Dashboard page and repository flow
+│   │   ├── PRReviewPanel.tsx         # PR quality result and expandable flags
 │   │   ├── ResultsPanel.tsx          # Evidence-backed result display
 │   │   ├── api.ts                    # Dashboard API adapter and types
 │   │   ├── dashboard.css             # Dashboard styles
@@ -292,8 +300,8 @@ Open the URL printed by Vite. The development server proxies <code>/api</code> c
 │       ├── ai/
 │       │   ├── __init__.py           # AI provider package
 │       │   ├── base.py               # Provider interface
-│       │   ├── ollama_client.py      # Local Ollama HTTP client
-│       │   ├── prompts.py            # Structured analysis prompt
+│       │   ├── pr_review.py          # Heuristic and hosted PR quality review
+│       │   ├── prompts.py            # Structured legacy analysis prompt
 │       │   └── schemas.py            # Validated AI output schema
 │       ├── analysis/
 │       │   ├── __init__.py           # Analysis package
@@ -340,12 +348,12 @@ Production serves the frontend and API from the same FastAPI process. The API ac
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | <code>/api/health</code> | Minimal liveness response: <code>{"status":"ok"}</code> |
-| GET | <code>/api/status</code> | Sanitized service status and local Ollama availability |
-| GET | <code>/api/ollama/models</code> | Available local Ollama models, when connected |
+| GET | <code>/api/status</code> | Sanitized status; reports AI configuration without making an inference request |
 | POST | <code>/api/repository</code> | Fetch public repository metadata, open PRs, and supported guides |
-| POST | <code>/api/analyze</code> | Analyze one open PR and return findings, category, evidence, and limitations |
+| POST | <code>/api/analyze</code> | Legacy evidence-based rule analysis for one open PR |
+| POST | <code>/api/analyze-pr</code> | PR-quality review using heuristics and optional hosted model fallback |
 
-<code>POST /api/repository</code> accepts <code>url</code> and optional <code>pr_limit</code> (1–30, default 10). <code>POST /api/analyze</code> accepts <code>url</code>, <code>pull_number</code>, optional <code>pr_limit</code>, <code>ai_enabled</code> (default false), and optional <code>ollama_model</code>. The special URL <code>sample</code> selects bundled example data and does not call GitHub.
+<code>POST /api/repository</code> accepts <code>url</code> and optional <code>pr_limit</code> (1–30, default 10). <code>POST /api/analyze</code> accepts <code>url</code>, <code>pull_number</code>, optional <code>pr_limit</code>, and keeps the legacy evidence-based checks heuristic-only. <code>POST /api/analyze-pr</code> accepts <code>owner</code>, <code>repo</code>, and <code>number</code>. Repository URL <code>sample</code> selects bundled example data and does not call GitHub.
 
 ~~~sh
 curl -sS http://localhost:8000/api/health
@@ -358,9 +366,9 @@ curl -sS -X POST http://localhost:8000/api/repository \
 ~~~
 
 ~~~sh
-curl -sS -X POST http://localhost:8000/api/analyze \
+curl -sS -X POST http://localhost:8000/api/analyze-pr \
   -H 'Content-Type: application/json' \
-  -d '{"url":"sample","pull_number":142,"pr_limit":10,"ai_enabled":false,"ollama_model":null}'
+  -d '{"owner":"pallets","repo":"flask","number":1}'
 ~~~
 
 The FastAPI interactive docs are available at <code>/api/docs</code> only when <code>PRISM_DEV=1</code>.
@@ -396,9 +404,9 @@ Values below match <code>.env.example</code>. Empty optional values use applicat
 | Variable | Purpose | Example/default |
 | --- | --- | --- |
 | <code>GITHUB_TOKEN</code> | Optional server-side token for higher GitHub API limits. | Unset |
-| <code>OLLAMA_BASE_URL</code> | Local Ollama HTTP address; only loopback hosts are accepted. | <code>http://127.0.0.1:11434</code> |
-| <code>OLLAMA_MODEL</code> | Local model name used when AI is enabled. | Empty/unset |
-| <code>OLLAMA_TIMEOUT_SECONDS</code> | AI request timeout, separate from GitHub's timeout. | <code>60</code> |
+| <code>GROQ_API_KEY</code> | Server-side key for primary Groq review provider. | Empty; heuristic-only results |
+| <code>GEMINI_API_KEY</code> | Server-side key for Gemma 4 fallback, used only if Groq fails. | Empty; fallback disabled |
+| Provider timeout | Hosted model call timeout, independent of GitHub timeout. | 30 seconds |
 | <code>MIN_DESCRIPTION_CHARS</code> | Character threshold for the low-severity short-description signal. | <code>20</code> |
 | <code>REQUEST_TIMEOUT_SECONDS</code> | GitHub request timeout. | <code>15</code> |
 | <code>MAX_PULL_REQUESTS</code> | Maximum open PRs fetched by the backend. | <code>30</code> |
@@ -410,7 +418,7 @@ Values below match <code>.env.example</code>. Empty optional values use applicat
 | <code>PRISM_DIST_DIR</code> | Built frontend directory served by FastAPI. | <code>dist</code> |
 | <code>PRISM_ALLOWED_ORIGINS</code> | Allowed CORS origins; empty disables cross-origin access. | Local Vite origins on ports 5173, 5174, and 8443 |
 | <code>PRISM_TRUST_PROXY</code> | Trust the first <code>X-Forwarded-For</code> address for per-IP limits. Enable only behind a trusted proxy. | <code>0</code> |
-| <code>PRISM_RATE_LIMIT_REQUESTS</code> | Requests allowed per IP on repository/analyze endpoints. | <code>20</code> |
+| <code>PRISM_RATE_LIMIT_REQUESTS</code> | Requests allowed per IP on repository and analysis endpoints. | <code>20</code> |
 | <code>PRISM_RATE_LIMIT_WINDOW_SECONDS</code> | Rate-limit window in seconds. | <code>600</code> |
 | <code>PRISM_MAX_REQUEST_BYTES</code> | Maximum accepted API request body size. | <code>1000000</code> |
 | <code>PRISM_MAX_COMPARISON_PRS</code> | Other open PRs compared during overlap analysis. | <code>10</code> |
@@ -419,18 +427,25 @@ Values below match <code>.env.example</code>. Empty optional values use applicat
 | <code>PRISM_GITHUB_CACHE_MAX_ITEMS</code> | Maximum process-local cached response entries. | <code>256</code> |
 | <code>VITE_DASHBOARD_URL</code> | Optional external dashboard URL embedded at frontend build time. | Empty; use <code>/dashboard</code> |
 
-<code>.env</code> is git-ignored and must never be committed. <code>.env.example</code> contains empty placeholders for secrets; it does not contain a usable GitHub token.
+<code>.env</code> is git-ignored and must never be committed. <code>.env.example</code> contains placeholders only, not usable credentials.
+
+### Configure hosted review locally or on Render
+
+1. Create a Groq API key and add it to `GROQ_API_KEY` in your ignored local `.env` or as a host-managed secret.
+2. Optionally configure `GEMINI_API_KEY` for the Gemma 4 fallback. It is called only after Groq fails; PRism does not call both providers concurrently.
+3. Check current provider pricing, quota, and data-use policies before enabling either key. Never place keys in frontend variables, source files, logs, or chat.
+4. Restart the local backend or redeploy after changing server environment values. With no keys, analysis remains heuristic-only. `/api/status` reports key presence but does not call a provider.
 
 <a id="deployment"></a>
 ## ☁️ Deployment
 
 <code>Dockerfile</code> builds the React/Vite app and serves the static bundle with FastAPI in one web service. <code>render.yaml</code> describes a Render Docker web service using the free plan, with <code>GITHUB_TOKEN</code> configured as a host-managed secret. No deployment URL is configured in this repository.
 
-The service applies security headers, a 1 MB default request-body limit, and a default limit of 20 <code>/api/repository</code> and <code>/api/analyze</code> requests per IP per 10 minutes. GitHub responses are cached in a bounded, five-minute, process-local cache by default. Rate limits and cache entries are not shared across workers or replicas. <code>PRISM_TRUST_PROXY</code> defaults to off; trust forwarding headers only when a trusted proxy replaces incoming values.
+The service applies security headers, a 1 MB default request-body limit, and a default limit of 20 repository and analysis requests per IP per 10 minutes. GitHub responses are cached in a bounded, five-minute, process-local cache by default. Rate limits and cache entries are not shared across workers or replicas. <code>PRISM_TRUST_PROXY</code> defaults to off; trust forwarding headers only when a trusted proxy replaces incoming values.
 
 The Render free plan can spin down an idle web service after 15 minutes without inbound traffic; waking a spun-down service may take about a minute. See [Render's free web-service limits](https://render.com/docs/free).
 
-The Render blueprint does not install or configure Ollama. Hosted AI is therefore unavailable by default; local Ollama remains an optional development feature.
+The Render blueprint declares `GITHUB_TOKEN`, `GROQ_API_KEY`, and `GEMINI_API_KEY` as host-managed secrets. Add provider keys only after reviewing current costs and quotas. Without them, the service reports heuristic-only review.
 
 <a id="testing-and-quality"></a>
 ## 🧪 Testing and Quality
@@ -471,9 +486,9 @@ Another process is using the default API port. Stop that process or choose anoth
 </details>
 
 <details>
-<summary>Ollama cannot be reached or the model is missing</summary>
+<summary>Hosted AI is unavailable</summary>
 
-Confirm Ollama is running locally, then check the configured model name with <code>ollama list</code>. Pull a model if needed with <code>ollama pull &lt;model-name&gt;</code>, set <code>OLLAMA_MODEL</code> in <code>.env</code>, and restart FastAPI. The dashboard disables AI when the service is unavailable. AI is optional; deterministic checks remain available.
+Check whether `GROQ_API_KEY` and optionally `GEMINI_API_KEY` are configured as backend secrets. `/api/status` reports presence only. Provider timeouts, outages, invalid output, and rate limits fall back to heuristic results. Check provider quotas and billing; never share keys in logs or screenshots.
 
 </details>
 
@@ -534,7 +549,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting. Do not include <code>
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and privacy](docs/SECURITY.md)
 - [GitHub API integration](docs/API_INTEGRATION.md)
-- [Local AI design](docs/AI_DESIGN.md)
+- [Hosted AI design](docs/AI_DESIGN.md)
 - [MVP scope](docs/MVP_SCOPE.md)
 - [Evaluation plan](docs/EVALUATION.md)
 - [README banner artwork](docs/assets/banner.svg)

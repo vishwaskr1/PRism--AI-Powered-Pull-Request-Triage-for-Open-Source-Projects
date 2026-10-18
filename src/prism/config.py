@@ -10,9 +10,8 @@ from pydantic import BaseModel, Field, field_validator
 
 class Settings(BaseModel):
     github_token: Optional[str] = None
-    ollama_base_url: str = "http://127.0.0.1:11434"
-    ollama_model: Optional[str] = None
-    ollama_timeout_seconds: float = Field(default=60, gt=0, le=600)
+    groq_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
     min_description_chars: int = Field(default=20, ge=0, le=1000)
     request_timeout_seconds: float = Field(default=15, gt=0, le=120)
     max_pull_requests: int = Field(default=30, ge=1, le=100)
@@ -89,25 +88,14 @@ class Settings(BaseModel):
             raise ValueError("LOG_LEVEL must be a standard logging level")
         return value
 
-    @field_validator("ollama_base_url")
-    @classmethod
-    def local_ollama_only(cls, value):
-        from urllib.parse import urlparse
-
-        parsed = urlparse(value)
-        if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-            raise ValueError("Ollama URL must use localhost HTTP")
-        return value.rstrip("/")
-
 
 @lru_cache(maxsize=1)
 def get_settings():
     load_dotenv()
     return Settings(
         github_token=os.getenv("GITHUB_TOKEN") or None,
-        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
-        ollama_model=os.getenv("OLLAMA_MODEL") or None,
-        ollama_timeout_seconds=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60")),
+        groq_api_key=os.getenv("GROQ_API_KEY") or None,
+        gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
         min_description_chars=int(os.getenv("MIN_DESCRIPTION_CHARS", "20")),
         request_timeout_seconds=float(os.getenv("REQUEST_TIMEOUT_SECONDS", "15")),
         max_pull_requests=int(os.getenv("MAX_PULL_REQUESTS", "30")),

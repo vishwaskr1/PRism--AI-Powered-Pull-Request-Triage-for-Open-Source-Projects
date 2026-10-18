@@ -25,7 +25,7 @@ class GitHubAuthenticationError(GitHubAPIError):
     pass
 
 
-class OllamaUnavailable(PRismError):
-    def __init__(self, message="Ollama is unavailable", reason="unreachable"):
+class AIProviderUnavailable(PRismError):
+    def __init__(self, message="AI provider is unavailable", reason="unreachable"):
         super().__init__(message)
         self.reason = reason

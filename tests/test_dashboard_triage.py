@@ -51,13 +51,13 @@ def test_missing_or_short_description_is_low_severity_possible_concern():
     assert result.category != "Potentially suspicious"
 
 
-def test_ollama_timeout_is_configurable_and_separate_from_github_timeout():
+def test_hosted_ai_timeout_is_separate_from_github_timeout():
+    from prism.ai.pr_review import AI_TIMEOUT_SECONDS
+
     settings = Settings()
-    assert settings.ollama_timeout_seconds == 60
+    assert AI_TIMEOUT_SECONDS == 30
     assert settings.request_timeout_seconds == 15
-    assert (
-        Settings(ollama_timeout_seconds=12, request_timeout_seconds=4).ollama_timeout_seconds == 12
-    )
+    assert Settings(request_timeout_seconds=4).request_timeout_seconds == 4
 
 
 def test_guideline_retrieval_reports_explicit_state():

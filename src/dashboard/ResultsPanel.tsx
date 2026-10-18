@@ -22,7 +22,10 @@ function evidenceType(sourceType: string) {
 function aiErrorMessage(error?: string | null) {
   if (error === "timeout") return "AI analysis timed out for this PR. Rule-based results only."
   if (error === "invalid_output") return "The AI returned a response PRism could not validate; it was discarded."
-  if (error === "unreachable") return "AI analysis unavailable: Ollama could not be reached."
+  if (error === "rate_limited") return "Hosted AI rate limit reached. Rule-based results only; please try again later."
+  if (error === "billing_required") return "Hosted AI billing is not available for this account. Rule-based results only."
+  if (error === "auth_required") return "The hosted AI API key is missing permission or is invalid. Rule-based results only."
+  if (error === "unreachable") return "AI analysis is temporarily unavailable from the hosted provider. Rule-based results only."
   return null
 }
 
@@ -185,7 +188,15 @@ export function ResultsPanel({ analysis, pulls }: ResultsPanelProps) {
                   </div>
                 ) : (
                   <div className="dashboard-evidence-content">
+                    {finding?.source === "ai" && finding.severity && (
+                      <p className="dashboard-finding-explanation">
+                        AI severity: {finding.severity}{finding.confidence !== undefined ? ` · self-assessed confidence ${Math.round(finding.confidence * 100)}%` : ""}
+                      </p>
+                    )}
                     {finding?.explanation && <p className="dashboard-finding-explanation">{finding.explanation}</p>}
+                    {finding?.source === "ai" && finding.recommended_action && (
+                      <p className="dashboard-finding-explanation"><strong>Human review:</strong> {finding.recommended_action}</p>
+                    )}
                     {evidence.map((item, index) => (
                       <EvidenceBlock key={`${item.source_type}-${item.source}-${index}`} evidence={item} analysis={analysis} />
                     ))}

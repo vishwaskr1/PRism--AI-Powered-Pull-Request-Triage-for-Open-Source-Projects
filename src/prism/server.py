@@ -3,6 +3,7 @@
 import math
 import os
 import re
+import threading
 import time
 from collections import OrderedDict
 from pathlib import Path
@@ -13,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from prism.ai.ollama_client import OllamaProvider
+from prism.ai.pr_review import analyze_pr_review
 from prism.config import get_settings
 from prism.exceptions import GitHubRateLimit, PRismError
 from prism.github import GitHubClient
@@ -39,6 +40,9 @@ app.add_middleware(
 )
 
 _rate_buckets: OrderedDict[str, list[float]] = OrderedDict()
+_pr_review_cache: OrderedDict[tuple[str, str, int, str], dict] = OrderedDict()
+_pr_review_cache_lock = threading.Lock()
+_pr_review_cache_limit = 512
 
 
 def _client_ip(request: Request) -> str:
@@ -51,7 +55,11 @@ def _client_ip(request: Request) -> str:
 
 @app.middleware("http")
 async def security_and_abuse_controls(request: Request, call_next):
-    if request.method == "POST" and request.url.path in {"/api/repository", "/api/analyze"}:
+    if request.method == "POST" and request.url.path in {
+        "/api/repository",
+        "/api/analyze",
+        "/api/analyze-pr",
+    }:
         now = time.monotonic()
         cutoff = now - settings.rate_limit_window_seconds
         ip = _client_ip(request)
@@ -120,7 +128,15 @@ class AnalyzeRequest(BaseModel):
     pull_number: int = Field(ge=1)
     pr_limit: int = Field(default=10, ge=1, le=30)
     ai_enabled: bool = False
-    ollama_model: Optional[str] = Field(default=None, max_length=128)
+    model_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class AnalyzePRRequest(BaseModel):
+    owner: str = Field(
+        min_length=1, max_length=39, pattern=r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+    )
+    repo: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
+    number: int = Field(ge=1)
 
 
 def _get_client() -> GitHubClient:
@@ -166,26 +182,72 @@ def health_check():
 
 @app.get("/api/status")
 def service_status():
-    """Sanitized status used by the dashboard to determine local AI availability."""
+    """Report configured review providers without making inference requests."""
     current = get_settings()
-    provider = OllamaProvider(base_url=current.ollama_base_url, model=current.ollama_model)
     return {
         "status": "ok",
-        "ai_available": provider.ping(),
-        "ai_model_configured": bool(current.ollama_model),
+        "ai_available": bool(current.groq_api_key or current.gemini_api_key),
+        "groq_configured": bool(current.groq_api_key),
+        "gemini_configured": bool(current.gemini_api_key),
     }
 
 
-@app.get("/api/ollama/models")
-def get_ollama_models():
-    current = get_settings()
-    provider = OllamaProvider(base_url=current.ollama_base_url, model=current.ollama_model)
-    connected = provider.ping()
-    return {
-        "connected": connected,
-        "models": provider.list_models() if connected else [],
-        "default": current.ollama_model or "llama3",
-    }
+@app.post("/api/analyze-pr")
+def analyze_pr_endpoint(req: AnalyzePRRequest):
+    """Return one cached or newly generated advisory review for a public PR."""
+    from prism.github.client import parse_repository_url
+
+    try:
+        parse_repository_url(f"https://github.com/{req.owner}/{req.repo}")
+    except PRismError as exc:
+        raise HTTPException(status_code=400, detail="Invalid GitHub owner or repository.") from exc
+
+    client = _get_client()
+    try:
+        pull = client.pull_request_data(req.owner, req.repo, req.number)
+        head_sha = (pull.get("head") or {}).get("sha") or "unknown"
+        cache_key = (req.owner.lower(), req.repo.lower(), req.number, head_sha)
+        with _pr_review_cache_lock:
+            cached = _pr_review_cache.get(cache_key)
+            if cached is not None:
+                _pr_review_cache.move_to_end(cache_key)
+                return {**cached, "cached": True}
+
+        files = client.pull_request_files_data(req.owner, req.repo, req.number)
+        commits = client.pull_request_commits(req.owner, req.repo, req.number)
+        login = (pull.get("user") or {}).get("login")
+        try:
+            author = client.user_profile(login) if login else None
+        except PRismError:
+            author = None
+        result = analyze_pr_review(
+            pull=pull,
+            files=files,
+            commits=commits,
+            author=author,
+            groq_api_key=get_settings().groq_api_key,
+            gemini_api_key=get_settings().gemini_api_key,
+        )
+        result.update(
+            {"owner": req.owner, "repo": req.repo, "number": req.number, "head_sha": head_sha}
+        )
+        with _pr_review_cache_lock:
+            _pr_review_cache[cache_key] = result
+            _pr_review_cache.move_to_end(cache_key)
+            while len(_pr_review_cache) > _pr_review_cache_limit:
+                _pr_review_cache.popitem(last=False)
+        return {**result, "cached": False}
+    except GitHubRateLimit as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="GitHub API rate limit reached. Configure a GitHub token or wait before retrying.",
+        ) from exc
+    except PRismError as exc:
+        raise HTTPException(
+            status_code=404 if "not found" in str(exc).lower() else 502, detail=str(exc)
+        ) from exc
+    finally:
+        client.close()
 
 
 @app.post("/api/repository")
@@ -256,21 +318,13 @@ def analyze_pull_request_endpoint(req: AnalyzeRequest):
                 status_code=404, detail="The selected open pull request was not found."
             )
 
-        provider = None
-        if req.ai_enabled:
-            provider = OllamaProvider(
-                base_url=current.ollama_base_url,
-                model=req.ollama_model or current.ollama_model,
-                timeout=current.ollama_timeout_seconds,
-            )
-
-        result = AnalysisService(client, ai_provider=provider).analyze(
+        result = AnalysisService(client).analyze(
             owner,
             repo,
             selected_pull,
             pulls,
             guidelines,
-            ai_enabled=req.ai_enabled,
+            ai_enabled=False,
             guideline_status=guideline_status,
         )
         result.guideline_status = guideline_status

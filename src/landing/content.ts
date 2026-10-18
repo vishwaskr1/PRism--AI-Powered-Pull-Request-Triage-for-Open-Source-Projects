@@ -210,11 +210,11 @@ export const trustCopy = {
 
 export const localCopy = {
   eyebrow: "OPEN AND LOCAL",
-  title: "Optional local AI, with a rule-based fallback.",
+  title: "Optional hosted AI, with a heuristic fallback.",
   points: [
-    "Local open-weight models through Ollama",
-    "No paid AI API required",
-    "Rule-based fallback works without AI",
+    "Groq-hosted gpt-oss-20b as the primary model",
+    "Gemma 4 is an optional fallback provider",
+    "Heuristic results work without provider keys",
     "MIT licensed",
   ],
 } as const
@@ -223,7 +223,7 @@ export const featureStatusConfig = [
   { name: "Repository analysis in the dashboard", status: "Implemented" },
   { name: "Evidence-linked checks in the dashboard", status: "Implemented" },
   { name: "Sample mode with a clear banner", status: "Implemented" },
-  { name: "Optional local Ollama explanations", status: "Partial", detail: "Partial: works with a local Ollama install; not available on the hosted site." },
+  { name: "Optional hosted PR quality review", status: "Partial", detail: "Groq and Gemini provider integration is available when server keys are configured; otherwise results use heuristic signals." },
   { name: "Evaluation set and published results", status: "Planned", detail: "No labeled evaluation has been run or published." },
 ] as const
 
@@ -238,7 +238,7 @@ export const failureCopy = {
 } as const
 
 export const faqCopy = {
-  analysisLocationAnswer: "Repository retrieval and rule checks run in the PRism backend. Optional AI analysis uses a local Ollama service only when it is available.",
+  analysisLocationAnswer: "Repository retrieval and PR quality analysis run in the PRism backend. Optional model requests are sent server-side to Groq, with Gemini as a fallback when configured.",
 } as const
 
 export const faqItems = [
@@ -259,7 +259,7 @@ export const faqItems = [
   {
     question: "Is AI required?",
     answer:
-      "No. Deterministic review checks work without AI. Optional Ollama analysis can add explanations when configured.",
+      "No. Heuristic review works without AI. Optional hosted models can add a PR quality review when configured.",
   },
   {
     question: "Does PRism work with private repositories?",
@@ -277,7 +277,7 @@ export const faqItems = [
   },
   {
     question: "Which AI models work?",
-    answer: "Any compatible model you run locally through Ollama.",
+    answer: "PRism uses Groq's openai/gpt-oss-20b model first, then Gemma 4 through Gemini only if Groq fails and a Gemini key is configured. Without either key it returns heuristic-only results.",
   },
   {
     question: "Where does analysis run?",
@@ -286,7 +286,7 @@ export const faqItems = [
 ] as const
 
 export const localStatusContent = {
-  statusNote: "Optional local AI is unavailable on the hosted site. Evaluation results have not been measured or published.",
+  statusNote: "Hosted AI is optional and disabled by default. Evaluation results have not been measured or published.",
   featureStatusLabel: "FEATURE STATUS",
   statusChip: "MVP in development",
 } as const

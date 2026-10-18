@@ -4,4 +4,4 @@ Place one JSON object per file in this directory, following `fixture.schema.json
 
 Two reviewers should independently assign one label: Likely legitimate, Needs review, Potentially suspicious, or Insufficient information. Resolve disagreements before changing a label. A high-risk label needs cited, verifiable evidence; do not infer contributor intent. `human_label: null` means the case is not labeled and will not contribute to metrics.
 
-Evaluation uses the checked-in PRism deterministic rules against these local snapshots, so it does not fetch GitHub data. Optional AI evaluation sends fixture PR content only to the configured localhost Ollama service. Never add credentials, private repository contents, or secrets to fixtures.
+Evaluation uses the checked-in deterministic checks against local snapshots and never fetches GitHub data or contacts AI providers. Never add credentials, private repository contents, or secrets to fixtures.

@@ -6,7 +6,7 @@ from prism.analysis.evidence_builder import validate_finding
 from prism.analysis.orchestrator import analyze_pull_request
 from prism.analysis.triage import triage_category
 from prism.config import get_settings
-from prism.exceptions import GitHubAPIError, OllamaUnavailable
+from prism.exceptions import AIProviderUnavailable, GitHubAPIError
 from prism.models import AnalysisResult, PullRequest
 
 
@@ -64,13 +64,17 @@ class AnalysisService:
         elif self.ai:
             result.ai_status = "failed"
             try:
-                ai_findings = self.ai.analyze_pr(detailed, guidelines)
+                ai_response, ai_findings = self.ai.analyze_pr(detailed, guidelines)
                 validated_ai_findings = []
                 for finding in ai_findings:
                     validated = validate_finding(finding, detailed, guidelines, others)
                     if validated:
                         validated_ai_findings.append(validated)
                 result.findings.extend(validated_ai_findings)
+                result.summary.ai_summary = ai_response.summary[:500]
+                result.summary.ai_limitations.extend(
+                    text[:300] for text in ai_response.limitations[:5] if text.strip()
+                )
                 result.summary.total_findings = sum(
                     finding.category not in {"change_relevance", "overlap_minor"}
                     for finding in result.findings
@@ -78,27 +82,21 @@ class AnalysisService:
                 result.summary.ai_enabled = True
                 result.ai_status = "completed"
                 result.ai_error = None
-            except OllamaUnavailable as exc:
+            except AIProviderUnavailable as exc:
                 result.summary.ai_enabled = False
                 result.ai_status = "failed"
                 result.ai_error = exc.reason
-                result.summary.limitations.append(
-                    _ai_limitation(exc.reason, include_compatibility_prefix=True)
-                )
+                result.summary.limitations.append(_ai_limitation(exc.reason))
             except Exception:
                 result.summary.ai_enabled = False
                 result.ai_status = "failed"
                 result.ai_error = "unreachable"
-                result.summary.limitations.append(
-                    _ai_limitation("unreachable", include_compatibility_prefix=True)
-                )
+                result.summary.limitations.append(_ai_limitation("unreachable"))
         else:
             result.summary.ai_enabled = False
             result.ai_status = "failed"
             result.ai_error = "unreachable"
-            result.summary.limitations.append(
-                _ai_limitation("unreachable", include_compatibility_prefix=True)
-            )
+            result.summary.limitations.append(_ai_limitation("unreachable"))
 
         category, status, reason = triage_category(
             result.findings,
@@ -113,13 +111,14 @@ class AnalysisService:
         return result
 
 
-def _ai_limitation(reason, include_compatibility_prefix=False):
+def _ai_limitation(reason):
     messages = {
         "timeout": "AI analysis timed out for this PR. Rule-based results only.",
         "invalid_output": "The AI returned a response PRism could not validate; it was discarded.",
-        "unreachable": "AI analysis unavailable: Ollama could not be reached.",
+        "unreachable": "AI analysis is temporarily unavailable from the hosted provider. Rule-based results only.",
+        "rate_limited": "Hosted AI rate limit reached. Rule-based results only; please try again later.",
+        "billing_required": "Hosted AI billing is not available for this account. Rule-based results only.",
+        "auth_required": "The hosted AI API key is missing permission or is invalid. Rule-based results only.",
     }
     message = messages.get(reason, messages["unreachable"])
-    if include_compatibility_prefix:
-        return "Ollama/AI analysis unavailable. " + message
     return message

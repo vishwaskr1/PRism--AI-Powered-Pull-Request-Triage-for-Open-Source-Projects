@@ -4,8 +4,8 @@
 - The optional GitHub token is loaded from the backend environment. There is no API for reading or rewriting `.env`.
 - Only canonical public `github.com` repository URLs are accepted. The backend constructs requests against the fixed GitHub API host and disables redirects.
 - HTTP requests have finite timeouts and bounded retries, pagination, file counts, and response sizes.
-- `/api/health` returns only `{"status":"ok"}`. `/api/status` reports local AI availability without returning service URLs, credentials, or raw exception messages.
-- Ollama is restricted to localhost. This project contains no paid or third-party model provider integration.
+- `/api/health` returns only `{"status":"ok"}`. `/api/status` reports whether Groq/Gemini keys are configured without making an inference request or returning service URLs, credentials, or raw exception messages.
+- `GROQ_API_KEY` and optional `GEMINI_API_KEY` are server-side only. A configured key enables provider requests for PR reviews; review current pricing and quotas before adding keys.
 - Repository descriptions, contribution guides, pull-request text, patches, and model output are untrusted. PRism does not clone repositories, execute code, install dependencies, or write to GitHub.
 - Rule and AI findings pass evidence validation. Unsupported citations are dropped, and unavailable context is recorded as uncertainty.
 - Analysis results are transient. There are no user accounts or database persistence.

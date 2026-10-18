@@ -1,7 +1,11 @@
-# Local AI design
+# PR quality review providers
 
-PRism uses Ollama only, and AI is optional. Deterministic checks run independently and remain available when Ollama is disabled, unreachable, or returns invalid output. The dashboard defaults AI off.
+The dashboard sends one pull request at a time to `POST /api/analyze-pr`. All GitHub retrieval and model calls happen in the FastAPI backend; the browser never receives provider credentials.
 
-When enabled, the service sends a bounded set of pull-request fields, contribution-guide text, and file patches to the Ollama server configured on localhost. Model output must cite one of those retrieved sources; the citation and any excerpt are validated against the source before the finding is shown. AI findings remain advisory and require human review.
+The backend computes conservative metadata and diff signals, then builds a bounded prompt. It prioritizes source patches, caps submitted diff text at 12,000 characters, and excludes lock/config-only and binary files. A model result must match a strict JSON schema. PR content is treated as untrusted input, and the model is asked to assess contribution quality rather than infer a contributor's intent.
 
-No cloud-model provider or AI API key configuration is included. Keep the Ollama endpoint on loopback; configuration rejects non-local hostnames and non-HTTP schemes.
+When `GROQ_API_KEY` is configured, PRism calls Groq's `openai/gpt-oss-20b` model first using the OpenAI-compatible API and JSON response mode. If that call fails, PRism tries `gemma-4-26b-a4b-it` through Google's Gemini API only when `GEMINI_API_KEY` is configured. The calls are sequential, never concurrent. A provider timeout or invalid response falls back to a heuristic-only result. The default provider timeout is 30 seconds.
+
+Set `GROQ_API_KEY` and optionally `GEMINI_API_KEY` only as backend secrets. Provider pricing, quotas, and availability vary by account and can change; review the provider console before enabling calls. With both keys empty, PRism does not contact an AI provider and reports `source: heuristic`.
+
+`GET /api/status` reports whether keys are configured. It makes no inference request and cannot guarantee provider reachability or available quota. The local evaluation scaffold is deterministic and does not contact AI providers.

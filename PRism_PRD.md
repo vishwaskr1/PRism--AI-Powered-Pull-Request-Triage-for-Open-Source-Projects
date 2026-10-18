@@ -1,60 +1,53 @@
 # PRism product requirements
 
-**Status:** MVP implementation specification  
-**Product:** Evidence-based GitHub pull request triage for maintainers
+**Status:** Hackathon MVP implementation specification
+**Product:** Advisory GitHub pull request review for maintainers
 
 ## Product goal
 
-PRism helps maintainers bring repository contribution guidance and available pull-request context into one review. It provides cautious, evidence-linked signals so a human can decide what to inspect. It does not make decisions about contributor intent, code safety, or merge readiness.
+PRism fetches public repository and pull request data, then presents heuristic and optional model-generated quality signals to help maintainers decide what to inspect. It does not verify contributor intent, code safety, or merge readiness.
 
 ## Principles
 
-- Evidence must come from retrieved repository, guideline, pull-request, or changed-file data.
-- Missing or incomplete data is uncertainty, not a reason to invent a finding.
-- Rule-based checks work without AI. AI is optional and runs through local Ollama only.
-- All retrieved repository text is untrusted data.
-- PRism is read-only and never executes code from a repository.
-- No account, sign-in, database, paid AI provider, or private repository support is in MVP scope.
+- Repository text and model output are untrusted input.
+- Missing data is uncertainty, not evidence of bad intent.
+- Provider calls happen only in the backend; keys never reach the browser.
+- PRism is read-only, does not execute repository code, and keeps results transient.
+- No accounts, private repositories, GitHub write actions, or database persistence.
 
-## Implemented behavior
+## Repository retrieval
 
-### Repository retrieval
+- Accept canonical public GitHub repository URLs.
+- Fetch repository metadata, a bounded set of open PRs, contribution-guide files, PR files/patches, commit messages, and public author metadata.
+- Use the fixed GitHub REST API host, optional server-side `GITHUB_TOKEN`, finite timeouts, bounded pagination and response sizes, and disabled redirects.
+- Cache GitHub responses in a bounded process-local TTL cache.
 
-- Accept public GitHub repository URLs in canonical HTTPS form.
-- Fetch repository metadata, up to a configured limit of open pull requests, and supported contribution-guide paths.
-- Use the fixed GitHub REST API host, bounded timeouts/retries/page sizes, disabled redirects, and capped response sizes.
-- Allow an optional server-side `GITHUB_TOKEN` for GitHub rate limits.
+## PR quality review
 
-### Analysis
+`POST /api/analyze-pr` accepts `{owner, repo, number}` and returns a schema-validated review with `verdict`, `score`, `confidence`, `summary`, `reasons`, `red_flags`, `green_flags`, `heuristic_score`, `signals`, `source`, and `model`.
 
-- Retrieve one selected pull request and its changed files and patches.
-- Run deterministic guideline, change-relevance, and possible-overlap checks.
-- Treat empty or short descriptions as a low-severity possible concern; it cannot alone produce Potentially suspicious.
-- Ignore generic overlap paths and raise a possible-overlap signal only for at least two meaningful shared paths, or one meaningful shared path with a similar title. A lone path is a minor observation.
-- Assign one user-facing category through conservative triage: verified high-severity evidence or two independent verified medium signals can be Potentially suspicious; other signals or material limitations require review.
-- Validate finding sources and quoted excerpts against retrieved context; discard unsupported findings.
-- Record missing patches, unavailable guidelines, and other limits as uncertainty.
-- Optionally ask a local Ollama model for structured explanations. Validate model citations through the same evidence checks as rule findings.
-- Keep analysis results transient; do not persist repository or pull-request data.
+The backend computes the `docs_only`, `trivial_change`, `whitespace_or_typo_only`, `lockfile_or_config_only`, `adds_name_to_contributors_list`, `empty_or_short_description`, `generic_title`, `new_account`, `no_linked_issue`, `low_quality_commit_messages`, and `hacktoberfest_season` signals. The score ranges from 0–100, where higher values represent a more useful-looking contribution. Calendar timing and account metadata are weak hints only; neither establishes intent.
 
-### User interface
+Diff context prioritizes source-code files, excludes lockfiles and binaries, and is capped at 12,000 characters. Provider calls have a 30-second timeout. Groq `openai/gpt-oss-20b` is primary; if that call fails, Gemma 4 `gemma-4-26b-a4b-it` is tried only when `GEMINI_API_KEY` is configured. The providers are called sequentially. Invalid output is retried once, then PRism returns a nonempty heuristic-only result. Without provider keys, no model request is made.
 
-- Provide an accessible responsive landing page and a lazy-loaded `/dashboard` route.
-- Accept a repository URL, a 1–30 pull-request limit, optional AI settings, and a bundled sample mode.
-- Show fetched open pull requests, analyze only the selected PR (automatically only when exactly one was fetched), and queue analyses one at a time. A category filter is available after analysis.
-- Clearly label bundled sample content. Never present it as a live repository analysis.
+Results are cached in memory by owner, repository, PR number, and head SHA. This is process-local and bounded; it is not shared across service replicas.
+
+## User interface
+
+- Provide an accessible responsive landing page and lazy-loaded `/dashboard` route.
+- Fetch open PRs before review. Analyze a selected PR only; analyze-all runs sequentially with a 2.5-second delay and skips results already held by the page.
+- Show loading, friendly per-row errors, verdict, score, summary, model source, and expandable reasons/flags.
+- Clearly mark bundled examples as `SAMPLE DATA, not a live analysis`.
 
 ## API requirements
 
 - `GET /api/health` returns only `{"status":"ok"}`.
-- `GET /api/status` reports sanitized local AI availability for the dashboard.
-- `GET /api/ollama/models` lists models available from the configured local Ollama service.
-- `POST /api/repository` retrieves metadata, bounded open PRs, and available contribution guides.
-- `POST /api/analyze` analyzes one public-repository pull request and returns findings and limitations.
-- No API route may write a GitHub repository, access private repositories, persist user accounts, or store analysis history.
+- `GET /api/status` reports whether provider keys are configured; it does not test connectivity or consume tokens.
+- `POST /api/repository` retrieves public repository metadata, bounded open PRs, and contribution-guide paths.
+- `POST /api/analyze-pr` returns the PR quality review described above.
+- `POST /api/analyze` retains the separate legacy evidence-based rule analysis route.
+- No route writes to GitHub, accesses private repositories, creates accounts, or persists review history.
 
-## Current result vocabulary and limitations
+## Current limitations
 
-Internal analysis statuses are `CONSISTENT_WITH_AVAILABLE_CHECKS`, `NEEDS_REVIEW`, `POSSIBLE_OVERLAP`, `INSUFFICIENT_EVIDENCE`, and `POTENTIALLY_SUSPICIOUS`. The API also returns one of `Likely legitimate`, `Needs review`, or `Potentially suspicious`; these are advisory labels, not verified judgments. PRism has no measured accuracy claim or published evaluation results yet. The fixture schema and runner are under `tests/eval/`; no reviewed dataset is included.
-
-Overlap ignore patterns are configurable with `PRISM_OVERLAP_IGNORED_PATHS`; the defaults cover documentation, metadata, lockfiles, generated, and vendored paths. Ollama is a partial/local-only feature and is unavailable on the hosted service. Evaluation metrics remain planned until a labeled dataset exists.
+PRism has no measured accuracy claim or published evaluation result. Provider availability, pricing, and quotas depend on the selected provider account. Labels and scores are advisory signals only, not judgments about contributor intent or code safety. The evaluation scaffold uses local fixtures and deterministic checks; it does not contact AI providers.

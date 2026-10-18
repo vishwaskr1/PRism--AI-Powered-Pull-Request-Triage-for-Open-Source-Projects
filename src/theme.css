@@ -109,6 +109,14 @@ html[data-theme="light"] :is(.dashboard-heading h1, .dashboard-results-heading h
 html[data-theme="light"] :is(.dashboard-heading p, .dashboard-results-heading p, .dashboard-result-meta, .dashboard-summary, .dashboard-finding-explanation, .dashboard-no-findings, .dashboard-uncertainty, .dashboard-pr-table td, .dashboard-pr-instruction, .dashboard-pr-list-heading > span) { color: #504b5c; }
 html[data-theme="light"] :is(.dashboard-panel-heading span, .dashboard-field small, .dashboard-toggle small, .dashboard-pr-controls, .dashboard-pr-table th, .dashboard-pr-table td::before, .dashboard-draft-badge, .dashboard-evidence-unavailable, .dashboard-overlap-caveat, .dashboard-minor-observations, .dashboard-minor-observations p) { color: #625d6c; }
 html[data-theme="light"] :is(.dashboard-settings, .dashboard-result-header, .dashboard-result-card, .dashboard-finding-card, .dashboard-pr-table, .dashboard-pr-table tbody tr, .dashboard-minor-observations) { border-color: #ded9e8; background: #fff; }
+html[data-theme="light"] .dashboard-quality-card { border-color: #ded9e8; background: #fff; }
+html[data-theme="light"] .dashboard-quality-card h3,
+html[data-theme="light"] .dashboard-ai-provider strong { color: #292536; }
+html[data-theme="light"] .dashboard-quality-card ul,
+html[data-theme="light"] .dashboard-quality-card p,
+html[data-theme="light"] .dashboard-ai-provider { color: #504b5c; }
+html[data-theme="light"] .dashboard-quality-card.caution { border-color: #e3bdc3; }
+html[data-theme="light"] .dashboard-quality-card.good { border-color: #b5d8c0; }
 html[data-theme="light"] :is(.dashboard-repo-row input, .dashboard-field input:not([type="checkbox"]), .dashboard-pr-controls select) { border-color: #cfc9da; background: #fff; color: #211d2b; }
 html[data-theme="light"] :is(.dashboard-repo-row input::placeholder, .dashboard-field input::placeholder) { color: #625d6c; }
 html[data-theme="light"] :is(.dashboard-repo-form > label, .dashboard-field > span, .dashboard-toggle strong) { color: #292536; }
