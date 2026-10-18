@@ -71,6 +71,7 @@ html[data-theme="light"] .trust-diagram-wrap { border-color: #ded9e8; background
 html[data-theme="light"] .preview-status { border-color: #e3d2a7; background: #fbf5e7; color: #735417; }
 html[data-theme="light"] .preview-window .preview-signal { background-color: transparent; color: #292536; }
 html[data-theme="light"] .preview-window .preview-signal.selected { border-color: #ded9e8; background: #f0edf7; }
+html[data-theme="light"] .preview-window .preview-signal.motion-highlight { border-color: #b8acd9; background: #eeeafb; }
 html[data-theme="light"] .preview-window .preview-signal strong { color: #292536; }
 html[data-theme="light"] .preview-window .preview-signal small { color: #625d6c; }
 html[data-theme="light"] .preview-window .preview-signal > b { color: #625d6c; }

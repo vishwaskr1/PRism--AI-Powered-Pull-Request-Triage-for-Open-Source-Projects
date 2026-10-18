@@ -159,28 +159,10 @@ export function useLandingMotion(enabled: boolean) {
             signals.forEach((signal) => {
               previewSequence
                 .call(() => signal.classList.add("motion-highlight"))
-                .to(
-                  signal,
-                  {
-                    borderColor: "#65577f",
-                    backgroundColor: "#211d2a",
-                    duration: 0.34,
-                  },
-                  "<",
-                )
-                .to(
-                  signal,
-                  {
-                    borderColor: signal.classList.contains("selected")
-                      ? "#393044"
-                      : "transparent",
-                    backgroundColor: signal.classList.contains("selected")
-                      ? "#1d1a25"
-                      : "transparent",
-                    duration: 0.34,
-                  },
-                  "+=0.32",
-                )
+                // Let CSS choose the colors so the same one-shot effect follows
+                // the active theme instead of leaving dark inline colors behind.
+                .to(signal, { y: -1, duration: 0.18, ease: "power1.out" }, "<")
+                .to(signal, { y: 0, duration: 0.18, ease: "power1.inOut" }, "+=0.32")
                 .call(() => signal.classList.remove("motion-highlight"))
             })
             previewSequence

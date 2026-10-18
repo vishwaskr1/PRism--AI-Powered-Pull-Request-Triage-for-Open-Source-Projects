@@ -39,7 +39,7 @@
   color: transparent;
 }
 .preview-signal { transition: border-color .25s ease, background-color .25s ease; }
-.preview-signal.motion-highlight { box-shadow: 0 0 18px rgba(139, 124, 246, .1); }
+.preview-signal.motion-highlight { border-color: #65577f; background: #211d2a; box-shadow: 0 0 18px rgba(139, 124, 246, .1); }
 .evidence-copy { display: inline-block; }
 
 .landing-how,
