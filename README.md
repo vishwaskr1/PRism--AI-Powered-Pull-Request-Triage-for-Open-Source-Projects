@@ -1,142 +1,550 @@
-# PRism
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="PRism — See every contribution clearly." width="100%" />
+</p>
 
-PRism helps open-source maintainers review public GitHub pull requests with repository guidance, deterministic checks, changed-file context, and traceable evidence. Results are recommendations for human review, not judgments about contributor intent or code safety. PRism never changes a repository.
+<h1 align="center">PRism</h1>
+<p align="center"><strong>AI-Powered Pull Request Triage for Open-Source Projects</strong></p>
+<p align="center"><em>“Evidence for review. Decisions stay with maintainers.”</em></p>
 
-## Current scope
+<p align="center">
+  <a href="https://github.com/vishwaskr1/PRism--AI-Powered-Pull-Request-Triage-for-Open-Source-Projects/actions/workflows/ci.yml"><img src="https://github.com/vishwaskr1/PRism--AI-Powered-Pull-Request-Triage-for-Open-Source-Projects/actions/workflows/ci.yml/badge.svg?branch=feat/full-project" alt="CI status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6f63d9.svg" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB.svg" alt="Python 3.9 or newer" />
+  <img src="https://img.shields.io/badge/Node.js-20.19%2B%20%7C%2022.12%2B-339933.svg" alt="Node.js 20.19 or 22.12 and newer" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB.svg" alt="React 19" />
+  <img src="https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg" alt="FastAPI 0.110 or newer" />
+  <img src="https://img.shields.io/badge/TypeScript-5.7%2B-3178C6.svg" alt="TypeScript 5.7 or newer" />
+</p>
 
-- React and Vite landing page plus a `/dashboard` route.
-- FastAPI backend retrieves public repository metadata, open pull requests, and supported contribution guides.
-- Deterministic checks can flag guideline mismatches, change relevance, and possible overlap.
-- Overlap signals ignore configurable generic paths; one shared meaningful file is minor unless titles are similar. Two shared meaningful files are a review lead, not proof of duplicate work.
-- Optional AI explanations use a local Ollama service. Rule-based checks work when AI is off or unavailable. AI defaults to off.
-- Sample mode displays bundled example content with a persistent sample-data label.
-- The dashboard lists the fetched open pull requests and analyzes only the selected PR (or automatically analyzes the only PR when exactly one is open).
-- Analyses run one at a time; the optional category filter only includes rows with completed analysis.
+> [!WARNING]
+> **PRism is advisory only. Labels are recommendations, not verified judgments about contributor intent or code safety. Maintainers make every decision.**
 
-No accounts, sign-in, database, paid AI service, private-repository access, code execution, or GitHub write operations are part of this MVP. Analysis accuracy has not yet been measured. Deployment comparison checks use at most 10 other open pull requests by default; a visible limitation is included if that cap is reached.
+<p align="center">
+  PRism brings public pull requests, repository guidance, deterministic checks, and evidence-linked review signals into one read-only workspace.
+</p>
 
-## Requirements
+Accounts, database persistence, private-repository access, GitHub write actions, code execution, and paid or cloud AI are outside the current MVP scope.
 
-- Python 3.9 or newer
-- Node.js 20.19+ or 22.12+
-- Optional: a GitHub personal access token for higher API rate limits
-- Optional: Ollama and a downloaded local model for AI explanations
+## 📑 Table of Contents
 
-## Setup
+- [Why PRism?](#why-prism)
+- [Key Features](#key-features)
+  - [Triage Dashboard](#triage-dashboard)
+  - [Evidence and Uncertainty](#evidence-and-uncertainty)
+  - [Deterministic Checks](#deterministic-checks)
+  - [Optional Local AI](#optional-local-ai)
+  - [Sample Mode](#sample-mode)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [API Reference](#api-reference)
+- [Evidence and Triage](#evidence-and-triage)
+- [Environment Variables](#environment-variables)
+- [Deployment](#deployment)
+- [Testing and Quality](#testing-and-quality)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Evaluation Status](#evaluation-status)
+- [Contributing](#contributing)
+- [Project Documents](#project-documents)
+- [License](#license)
 
-```bash
+<a id="why-prism"></a>
+## 🧭 Why PRism?
+
+| Review challenge | PRism's current approach |
+| --- | --- |
+| Open pull requests can pile up without repository context. | Fetches a bounded list of public open PRs and lets a maintainer analyze one PR at a time. |
+| Contribution guidance can be hard to find during review. | Retrieves supported contribution-guide files and links guideline findings to their source. |
+| Automated claims are difficult to verify. | Findings are validated against retrieved metadata, guideline text, or changed-file data before they are returned. |
+| Review tools can overstate what they know. | PRism is read-only, shows uncertainty, and leaves decisions to maintainers. |
+
+<a id="key-features"></a>
+## ✨ Key Features
+
+<a id="triage-dashboard"></a>
+### 🗂️ Triage Dashboard
+
+- Fetch public repository metadata, contribution guidance, and a configurable list of open pull requests.
+- Analyze the selected PR; if exactly one open PR is fetched, PRism selects it automatically. Analyses are queued one at a time.
+- Show one of three advisory categories: **Likely legitimate**, **Needs review**, or **Potentially suspicious**.
+- The category filter applies after a row has an analysis result.
+
+<a id="evidence-and-uncertainty"></a>
+### 🔎 Evidence and Uncertainty
+
+- Expand a finding to inspect its evidence source, location, and any returned excerpt.
+- Open the analyzed pull request's files on GitHub.
+- Show unavailable context, capped comparisons, missing patches, and other limitations as uncertainty.
+- Findings without evidence that validates against retrieved context are discarded.
+
+<a id="deterministic-checks"></a>
+### 📏 Deterministic Checks
+
+Current rule checks include:
+
+- A contribution-guide check that can flag test-related guidance when changed paths do not look like test files. This is a review prompt, not proof that a test is required.
+- A title/description-to-path lexical heuristic. It is shown as a minor observation and does not affect the category or primary finding count.
+- Possible overlap based on meaningful shared changed paths and a similar-title heuristic. Generic paths such as documentation, lockfiles, generated files, and vendor paths are ignored by default.
+- A missing or short description signal. It is low severity, worded as a possible concern, and **cannot make a PR Potentially suspicious by itself**.
+
+| Rule findings | AI findings |
+| --- | --- |
+| Produced by deterministic checks over retrieved repository, pull-request, guideline, and changed-file data. | Optional structured suggestions from a locally configured Ollama service. |
+| Do not require an AI service. Evidence is checked against the retrieved source. | Must cite retrieved sources; evidence is validated before an AI finding is included. |
+| Continue to work when AI is off or unavailable. | May fail, be unavailable, or have its unsupported output discarded. |
+
+<a id="optional-local-ai"></a>
+### 🧠 Optional Local AI
+
+AI is optional and defaults to off. When enabled, PRism sends bounded PR context and retrieved guidance to the configured **local Ollama HTTP service**. AI suggestions are advisory and use the same evidence validation as rule findings. The hosted Render blueprint does not install or configure Ollama, so AI is unavailable on that deployment unless its environment is deliberately changed to provide a trusted local service.
+
+<a id="sample-mode"></a>
+### 🧪 Sample Mode
+
+Use bundled example content to explore the interface without fetching a live repository. Sample results are marked **SAMPLE DATA, not a live analysis**. They do not represent live repository data or measured product performance.
+
+<a id="architecture"></a>
+## 🏗️ Architecture
+
+~~~mermaid
+flowchart LR
+    UI["React + Vite UI"] -->|same-origin API requests| API["FastAPI"]
+    API --> REPO["Repository service"]
+    REPO -->|read-only REST| GH["GitHub REST API"]
+    REPO --> GUIDE["Supported guideline retrieval"]
+    API --> ANALYSIS["Analysis service"]
+    GUIDE --> RULES["Deterministic checks"]
+    ANALYSIS --> RULES
+    ANALYSIS -. optional .-> OLLAMA["Local Ollama"]
+    RULES --> VALIDATE["Evidence validation"]
+    OLLAMA -. structured suggestions .-> VALIDATE
+    VALIDATE --> TRIAGE["Category and uncertainty"]
+    TRIAGE --> UI
+~~~
+
+The GitHub client constructs requests against the fixed <code>api.github.com</code> host, follows no redirects, bounds timeouts, pagination, and response sizes, and keeps a bounded process-local response cache. The backend does not clone repositories, execute repository code, or write to GitHub. The dashboard uses bundled sample data for sample mode; live repository data is fetched only when requested.
+
+<a id="tech-stack"></a>
+## 🧰 Tech Stack
+
+| Layer | Technologies in the project manifests |
+| --- | --- |
+| Frontend | React 19, React DOM 19, TypeScript 5.7+, Vite 8, GSAP, Three.js |
+| Backend | Python 3.9+, FastAPI, Uvicorn, HTTPX, Pydantic, python-dotenv |
+| Quality and delivery | pytest, Ruff, Vitest, Testing Library, TypeScript |
+| Optional AI | No added package dependency; Ollama is an external local HTTP service |
+
+<a id="getting-started"></a>
+## 🚀 Getting Started
+
+### Prerequisites
+
+| Requirement | Version | Check |
+| --- | --- | --- |
+| Python | 3.9 or newer | <code>python3 --version</code> |
+| Node.js | 20.19+ or 22.12+ | <code>node --version</code> |
+| Git | Installed | <code>git --version</code> |
+| Docker (optional) | Docker Engine | <code>docker --version</code> |
+| Ollama (optional, local AI) | Installed locally with a model | <code>ollama --version</code> |
+
+### Fast Setup with Docker
+
+From the project root:
+
+~~~sh
+docker build -t prism .
+docker run --rm --name prism -p 8000:8000 prism
+~~~
+
+Open <code>http://localhost:8000/</code> or <code>http://localhost:8000/dashboard</code>. Stop the container with Ctrl+C. Docker builds the Vite frontend and packages it with FastAPI as one web service.
+
+### Manual Installation
+
+1. Clone the repository and enter its directory:
+
+~~~sh
+git clone https://github.com/vishwaskr1/PRism--AI-Powered-Pull-Request-Triage-for-Open-Source-Projects.git
+cd PRism--AI-Powered-Pull-Request-Triage-for-Open-Source-Projects
+~~~
+
+2. Create and activate a virtual environment, then install the backend:
+
+<details>
+<summary>macOS and Linux</summary>
+
+~~~sh
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-npm install
+~~~
+
+</details>
+
+<details>
+<summary>Windows PowerShell</summary>
+
+~~~powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+~~~
+
+</details>
+
+3. Install frontend dependencies and create the local environment file:
+
+~~~sh
+npm ci
 cp .env.example .env
-```
+~~~
 
-Keep `.env` private. If you already have one, edit it in place instead of replacing it. The backend reads the variables documented in `.env.example`. `PRISM_DEV=1` enables API docs and reload for local use; leave it off in production.
+On Windows PowerShell, use <code>Copy-Item .env.example .env</code> instead of <code>cp</code>. Keep <code>.env</code> private; never commit it. Edit it in place if it already exists. <code>PRISM_DEV=1</code> enables local API documentation and reload; its default is off.
 
-## Run locally
+4. Start the API in one terminal:
 
-Start each process in a separate terminal:
-
-```bash
-# Terminal 1: API (set PRISM_DEV=1 in .env to enable reload and API docs)
+~~~sh
 .venv/bin/python -m prism.server
+~~~
 
-# Terminal 2: web app (Vite proxies /api to port 8000)
+On Windows PowerShell, run <code>..venvScriptspython.exe -m prism.server</code> instead. The API listens on port 8000 by default.
+
+5. Start the Vite development server in a second terminal:
+
+~~~sh
 npm run dev -- --host 127.0.0.1
-```
+~~~
 
-Open the Vite URL printed in the terminal. The API liveness endpoint is `http://127.0.0.1:8000/api/health`; sanitized dependency status is at `/api/status`.
+Open the URL printed by Vite. The development server proxies <code>/api</code> calls to FastAPI. In the dashboard, enable **Sample mode** to explore bundled example data. For live repository fetches, use a public GitHub repository URL. To shut down, press Ctrl+C in both terminals.
 
-For local AI, start Ollama and set `OLLAMA_MODEL` to a model installed on your machine. AI is optional and off by default.
-`OLLAMA_TIMEOUT_SECONDS` controls inference time independently of GitHub's `REQUEST_TIMEOUT_SECONDS` (default 60 seconds). `MIN_DESCRIPTION_CHARS` sets the short-description signal threshold (default 20 characters).
-`PRISM_OVERLAP_IGNORED_PATHS` can replace the default comma-separated file patterns excluded from overlap detection.
+<a id="project-structure"></a>
+## 🗃️ Project Structure
 
-## API
+~~~text
+.
+├── .dockerignore                     # Docker build exclusions
+├── .env.example                      # Environment variable template
+├── .github/workflows/ci.yml          # CI checks and secret scan
+├── .gitignore                        # Local/generated-file exclusions
+├── .python-version                  # Python toolchain version hint
+├── CONTRIBUTING.md                   # Contributor guidance
+├── Dockerfile                        # Single-service multi-stage build
+├── LICENSE                           # MIT license
+├── Makefile                          # Common local commands
+├── PRism_PRD.md                      # Product requirements
+├── README.md                         # Project guide
+├── docs/
+│   ├── AI_DESIGN.md                  # Local AI design and boundaries
+│   ├── API_INTEGRATION.md            # GitHub API integration
+│   ├── ARCHITECTURE.md               # System design
+│   ├── EVALUATION.md                 # Evaluation protocol and status
+│   ├── MVP_SCOPE.md                  # Current scope and limits
+│   ├── SECURITY.md                   # Security notes
+│   └── assets/
+│       └── banner.svg                # README banner artwork
+├── index.html                        # Vite HTML entry document
+├── package.json                      # Frontend scripts and dependencies
+├── package-lock.json                 # Locked npm dependency tree
+├── pyproject.toml                    # Python package and tool configuration
+├── public/
+│   ├── favicon.svg                   # Browser icon
+│   └── social-preview.png            # Social-sharing artwork, not a screenshot
+├── render.yaml                       # Render single-service blueprint
+├── tsconfig.json                     # TypeScript compiler settings
+├── vite.config.ts                    # Vite development and build settings
+├── src/
+│   ├── LandingPage.tsx               # Landing-page composition
+│   ├── index.css                     # Global styles
+│   ├── landing.css                   # Landing-page styles
+│   ├── router.tsx                    # Client-side routes
+│   ├── main.tsx                      # React entry point
+│   ├── vite-env.d.ts                 # Vite environment typing
+│   ├── dashboard/
+│   │   ├── DashboardPage.tsx         # Dashboard page and repository flow
+│   │   ├── ResultsPanel.tsx          # Evidence-backed result display
+│   │   ├── api.ts                    # Dashboard API adapter and types
+│   │   ├── dashboard.css             # Dashboard styles
+│   │   └── results.ts                # Finding grouping and summaries
+│   ├── landing/
+│   │   ├── Brand.tsx                 # Shared brand mark
+│   │   ├── DashboardLink.tsx         # Dashboard navigation
+│   │   ├── PrismScene.tsx            # Lazy-loaded Three.js hero scene
+│   │   ├── content.ts                # Landing-page copy and sample display data
+│   │   ├── landing-motion.css        # Motion and reduced-motion styles
+│   │   ├── motionConfig.ts           # Motion flags and settings
+│   │   ├── useLandingMotion.ts       # GSAP animation hook
+│   │   └── sections/
+│   │       ├── FailureSection.tsx    # Failure and fallback explanation
+│   │       ├── FaqSection.tsx        # Frequently asked questions
+│   │       ├── LocalSection.tsx      # Local setup information
+│   │       ├── SectionHeading.tsx    # Shared section heading
+│   │       ├── TrialSection.tsx      # Sample analysis and repository input
+│   │       ├── TrustSection.tsx      # Evidence and trust explanation
+│   │       └── TriageSection.tsx     # Category information
+│   └── prism/
+│       ├── __init__.py               # Backend package
+│       ├── config.py                 # Environment settings
+│       ├── exceptions.py             # Safe domain errors
+│       ├── logging_config.py         # Logging setup
+│       ├── sample_data.py            # Bundled sample fixtures
+│       ├── server.py                 # FastAPI routes and static SPA fallback
+│       ├── ai/
+│       │   ├── __init__.py           # AI provider package
+│       │   ├── base.py               # Provider interface
+│       │   ├── ollama_client.py      # Local Ollama HTTP client
+│       │   ├── prompts.py            # Structured analysis prompt
+│       │   └── schemas.py            # Validated AI output schema
+│       ├── analysis/
+│       │   ├── __init__.py           # Analysis package
+│       │   ├── change_relevance.py   # Description and path heuristics
+│       │   ├── evidence_builder.py   # Source-reference validation
+│       │   ├── guideline_checks.py   # Contribution-guide checks
+│       │   ├── orchestrator.py       # Deterministic analysis orchestration
+│       │   ├── overlap_detection.py  # Shared-path overlap checks
+│       │   └── triage.py             # Category assignment
+│       ├── github/
+│       │   ├── __init__.py           # GitHub client exports
+│       │   └── client.py             # Bounded GitHub REST client
+│       ├── models/
+│       │   ├── __init__.py           # Domain model exports
+│       │   ├── analysis.py           # Analysis response models
+│       │   ├── evidence.py           # Evidence reference model
+│       │   ├── finding.py            # Finding model
+│       │   ├── pull_request.py       # Pull request and changed-file models
+│       │   └── repository.py         # Repository and guideline models
+│       └── services/
+│           ├── __init__.py           # Service package
+│           ├── analysis_service.py   # Pull-request analysis service
+│           └── repository_service.py # Repository retrieval service
+└── tests/
+    ├── dashboard_results.test.tsx   # Dashboard grouping and interaction tests
+    ├── eval/
+    │   ├── fixture.schema.json      # Evaluation fixture schema
+    │   ├── labeling-guide.md        # Human-labeling instructions
+    │   └── run_evaluation.py        # Evaluation runner
+    ├── integration/
+    │   └── test_analysis_pipeline.py # Pipeline integration tests
+    ├── test_dashboard_triage.py      # Category and analysis tests
+    ├── test_evaluation_scaffold.py   # Evaluation runner tests
+    ├── test_foundation.py            # Core rule and model tests
+    ├── test_github_client.py         # GitHub API client tests
+    └── test_server.py                # API and deployment behavior tests
+~~~
 
-| Method | Endpoint | Purpose |
+<a id="api-reference"></a>
+## 🔌 API Reference
+
+Production serves the frontend and API from the same FastAPI process. The API accepts these routes:
+
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | Minimal liveness response: `{"status":"ok"}` |
-| `GET` | `/api/status` | Sanitized status and local AI availability for the dashboard |
-| `GET` | `/api/ollama/models` | List local Ollama models |
-| `POST` | `/api/repository` | Retrieve a public repository and a bounded list of open PRs |
-| `POST` | `/api/analyze` | Analyze one open PR with deterministic checks and optional Ollama |
+| GET | <code>/api/health</code> | Minimal liveness response: <code>{"status":"ok"}</code> |
+| GET | <code>/api/status</code> | Sanitized service status and local Ollama availability |
+| GET | <code>/api/ollama/models</code> | Available local Ollama models, when connected |
+| POST | <code>/api/repository</code> | Fetch public repository metadata, open PRs, and supported guides |
+| POST | <code>/api/analyze</code> | Analyze one open PR and return findings, category, evidence, and limitations |
 
-The browser validates the repository URL and the backend independently accepts only canonical `https://github.com/{owner}/{repo}` URLs. GitHub requests use a fixed API host, bounded timeouts and pagination, disabled redirects, and response-size limits.
+<code>POST /api/repository</code> accepts <code>url</code> and optional <code>pr_limit</code> (1–30, default 10). <code>POST /api/analyze</code> accepts <code>url</code>, <code>pull_number</code>, optional <code>pr_limit</code>, <code>ai_enabled</code> (default false), and optional <code>ollama_model</code>. The special URL <code>sample</code> selects bundled example data and does not call GitHub.
 
-## Deploy as one web service
+~~~sh
+curl -sS http://localhost:8000/api/health
+~~~
 
-The multi-stage Docker build compiles the Vite app and packages its `dist/` directory with FastAPI. FastAPI serves both the API and the React single-page app, including direct navigation and refreshes on `/dashboard`. `render.yaml` defines a single Render Docker web service; it does not start a separate frontend service. Configure `GITHUB_TOKEN` as a secret in the host dashboard, never in this repository.
+~~~sh
+curl -sS -X POST http://localhost:8000/api/repository \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"sample","pr_limit":10}'
+~~~
 
-For a local container smoke test:
+~~~sh
+curl -sS -X POST http://localhost:8000/api/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"sample","pull_number":142,"pr_limit":10,"ai_enabled":false,"ollama_model":null}'
+~~~
 
-```bash
-docker build -t prism .
-docker run --rm -p 8000:8000 prism
-curl -i http://localhost:8000/
-curl -i http://localhost:8000/dashboard
-curl -i http://localhost:8000/api/health
-```
+The FastAPI interactive docs are available at <code>/api/docs</code> only when <code>PRISM_DEV=1</code>.
 
-The server applies CSP and browser security headers, a 1 MB default request limit, and an in-memory limit of 20 repository/analysis requests per IP per 10 minutes. These controls and the bounded GitHub response cache are per process; use a shared gateway/store for multiple workers or replicas. Proxy headers are ignored unless `PRISM_TRUST_PROXY=1`; enable that only behind a trusted proxy that overwrites incoming forwarding headers. For same-origin hosting, `PRISM_ALLOWED_ORIGINS` can be empty. Set it to explicit origins only when the browser app is hosted separately.
+<a id="evidence-and-triage"></a>
+## 🧾 Evidence and Triage
 
-Render free instances may sleep when idle. Local Ollama is not included in the container; the dashboard detects that and leaves AI disabled with a rule-based-only notice. Configure an Ollama endpoint only when the deployment can reach a trusted local Ollama service.
+~~~mermaid
+flowchart LR
+    CLAIM["Rule or AI claim"] --> SOURCE["Compare with retrieved source"]
+    SOURCE -->|valid reference and excerpt| SHOW["Return with evidence"]
+    SOURCE -->|missing or unsupported evidence| DROP["Discard finding"]
+    SHOW --> UNCERTAINTY["Keep missing context visible as uncertainty"]
+~~~
 
-## Development checks
+Every returned rule or AI finding must retain a source reference validated against retrieved pull-request metadata, guideline text, or changed-file patch data. PRism does not treat missing evidence as proof.
 
-```bash
+The API returns one user-facing category:
+
+| Category | Assignment summary |
+| --- | --- |
+| **Likely legitimate** | No primary findings and no material limitations. This is not an approval or safety judgment. |
+| **Needs review** | Other findings, insufficient evidence, unavailable diffs, or material limitations require human review. |
+| **Potentially suspicious** | At least one high-severity finding with evidence, or two independent medium-severity evidence-backed findings, when context is sufficient. |
+
+A missing or short description is low severity and cannot produce **Potentially suspicious** by itself. A shared path or similar title is only a review lead, not proof of duplicate intent or work.
+
+<a id="environment-variables"></a>
+## ⚙️ Environment Variables
+
+Values below match <code>.env.example</code>. Empty optional values use application defaults where applicable. Set local values in <code>.env</code>; never commit this file.
+
+| Variable | Purpose | Example/default |
+| --- | --- | --- |
+| <code>GITHUB_TOKEN</code> | Optional server-side token for higher GitHub API limits. | Unset |
+| <code>OLLAMA_BASE_URL</code> | Local Ollama HTTP address; only loopback hosts are accepted. | <code>http://127.0.0.1:11434</code> |
+| <code>OLLAMA_MODEL</code> | Local model name used when AI is enabled. | Empty/unset |
+| <code>OLLAMA_TIMEOUT_SECONDS</code> | AI request timeout, separate from GitHub's timeout. | <code>60</code> |
+| <code>MIN_DESCRIPTION_CHARS</code> | Character threshold for the low-severity short-description signal. | <code>20</code> |
+| <code>REQUEST_TIMEOUT_SECONDS</code> | GitHub request timeout. | <code>15</code> |
+| <code>MAX_PULL_REQUESTS</code> | Maximum open PRs fetched by the backend. | <code>30</code> |
+| <code>MAX_CHANGED_FILES</code> | Maximum changed files retrieved per PR. | <code>100</code> |
+| <code>LOG_LEVEL</code> | Application log level. | <code>INFO</code> |
+| <code>HOST</code> | FastAPI bind address. | <code>0.0.0.0</code> |
+| <code>PORT</code> | FastAPI port; the Vite proxy expects the API on port 8000 by default. | <code>8000</code> |
+| <code>PRISM_DEV</code> | Enables API docs and development reload. | <code>0</code> |
+| <code>PRISM_DIST_DIR</code> | Built frontend directory served by FastAPI. | <code>dist</code> |
+| <code>PRISM_ALLOWED_ORIGINS</code> | Allowed CORS origins; empty disables cross-origin access. | Local Vite origins on ports 5173, 5174, and 8443 |
+| <code>PRISM_TRUST_PROXY</code> | Trust the first <code>X-Forwarded-For</code> address for per-IP limits. Enable only behind a trusted proxy. | <code>0</code> |
+| <code>PRISM_RATE_LIMIT_REQUESTS</code> | Requests allowed per IP on repository/analyze endpoints. | <code>20</code> |
+| <code>PRISM_RATE_LIMIT_WINDOW_SECONDS</code> | Rate-limit window in seconds. | <code>600</code> |
+| <code>PRISM_MAX_REQUEST_BYTES</code> | Maximum accepted API request body size. | <code>1000000</code> |
+| <code>PRISM_MAX_COMPARISON_PRS</code> | Other open PRs compared during overlap analysis. | <code>10</code> |
+| <code>PRISM_OVERLAP_IGNORED_PATHS</code> | Optional comma-separated path patterns replacing built-in generic-path exclusions. | Empty; built-in patterns |
+| <code>PRISM_GITHUB_CACHE_TTL_SECONDS</code> | Lifetime of process-local GitHub responses. | <code>300</code> |
+| <code>PRISM_GITHUB_CACHE_MAX_ITEMS</code> | Maximum process-local cached response entries. | <code>256</code> |
+| <code>VITE_DASHBOARD_URL</code> | Optional external dashboard URL embedded at frontend build time. | Empty; use <code>/dashboard</code> |
+
+<code>.env</code> is git-ignored and must never be committed. <code>.env.example</code> contains empty placeholders for secrets; it does not contain a usable GitHub token.
+
+<a id="deployment"></a>
+## ☁️ Deployment
+
+<code>Dockerfile</code> builds the React/Vite app and serves the static bundle with FastAPI in one web service. <code>render.yaml</code> describes a Render Docker web service using the free plan, with <code>GITHUB_TOKEN</code> configured as a host-managed secret. No deployment URL is configured in this repository.
+
+The service applies security headers, a 1 MB default request-body limit, and a default limit of 20 <code>/api/repository</code> and <code>/api/analyze</code> requests per IP per 10 minutes. GitHub responses are cached in a bounded, five-minute, process-local cache by default. Rate limits and cache entries are not shared across workers or replicas. <code>PRISM_TRUST_PROXY</code> defaults to off; trust forwarding headers only when a trusted proxy replaces incoming values.
+
+The Render free plan can spin down an idle web service after 15 minutes without inbound traffic; waking a spun-down service may take about a minute. See [Render's free web-service limits](https://render.com/docs/free).
+
+The Render blueprint does not install or configure Ollama. Hosted AI is therefore unavailable by default; local Ollama remains an optional development feature.
+
+<a id="testing-and-quality"></a>
+## 🧪 Testing and Quality
+
+Run the backend checks from the repository root:
+
+~~~sh
 .venv/bin/pytest
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
+~~~
+
+Run the frontend checks:
+
+~~~sh
 npm ci
 npm run typecheck
+npm run test:ui
 npm run build
+~~~
+
+Build the production container with:
+
+~~~sh
 docker build -t prism:check .
-```
+~~~
 
-## Project layout
+CI runs Ruff lint and format checks, pytest, TypeScript checking, UI tests, the Vite production build, Docker build, and a Gitleaks scan. Local results depend on which commands you run; the CI badge above reports the workflow status.
 
-```text
-src/
-├── LandingPage.tsx             # Landing page
-├── dashboard/                  # Dashboard shell and API adapter
-├── landing/                    # Shared content, effects, and landing sections
-└── prism/
-    ├── server.py               # FastAPI routes
-    ├── sample_data.py          # Bundled sample fixtures
-    ├── github/                  # Bounded GitHub REST client
-    ├── analysis/                # Deterministic rules and evidence validation
-    ├── ai/                      # Optional local Ollama integration
-    └── services/                # Repository and analysis orchestration
-```
+<a id="troubleshooting"></a>
+## 🛠️ Troubleshooting
 
-## Safety and limitations
+<details>
+<summary>Port 8000 is already in use</summary>
 
-- PRism is advisory. Maintainers make all decisions.
-- Repository content and model output are treated as untrusted input; repository code is never executed.
-- Missing source context is represented as uncertainty. Findings without validated evidence are dropped.
-- An optional `GITHUB_TOKEN` is read from the backend environment and is never changed through an API endpoint.
-- Ollama is restricted to localhost. No PR content is sent to a paid or third-party model provider by this code.
-- The default rate limit and cache are in-memory and per process; they do not coordinate across replicas.
-- Comparison checks cover at most `PRISM_MAX_COMPARISON_PRS` other open pull requests (default 10); results state when that cap is reached.
-- CSP allows inline styles because GSAP writes animation transforms at runtime; scripts remain same-origin only.
+Another process is using the default API port. Stop that process or choose another API port with <code>PORT</code>. If you change the API port while using Vite, also update the <code>/api</code> proxy target in <code>vite.config.ts</code>, which defaults to <code>http://127.0.0.1:8000</code>.
 
-## Project documents
+</details>
 
-- [Product requirements document](PRism_PRD.md)
+<details>
+<summary>Ollama cannot be reached or the model is missing</summary>
+
+Confirm Ollama is running locally, then check the configured model name with <code>ollama list</code>. Pull a model if needed with <code>ollama pull &lt;model-name&gt;</code>, set <code>OLLAMA_MODEL</code> in <code>.env</code>, and restart FastAPI. The dashboard disables AI when the service is unavailable. AI is optional; deterministic checks remain available.
+
+</details>
+
+<details>
+<summary>GitHub reports a rate limit</summary>
+
+Unauthenticated GitHub API requests have lower limits. Set a personal access token in the backend's <code>GITHUB_TOKEN</code> environment variable or <code>.env</code>, then restart the API. Keep the token private and read-only.
+
+</details>
+
+<details>
+<summary>A direct /dashboard visit returns 404</summary>
+
+The FastAPI static fallback serves <code>/dashboard</code> when a production frontend bundle exists. Run <code>npm run build</code> before starting FastAPI for a built deployment. During development, run the Vite server with FastAPI and use the Vite URL.
+
+</details>
+
+<details>
+<summary>Node.js is too old for the frontend toolchain</summary>
+
+Check <code>node --version</code>. Use Node.js 20.19 or newer in the 20.x line, or 22.12 or newer in the 22.x line. Then reinstall dependencies with <code>npm ci</code>.
+
+</details>
+
+<a id="roadmap"></a>
+## 🗺️ Roadmap
+
+- [x] Public repository retrieval and read-only GitHub access.
+- [x] Deterministic checks, evidence validation, and advisory categories.
+- [x] Dashboard with one-at-a-time analysis and visible uncertainty.
+- [x] Bundled sample mode marked as sample data.
+- [ ] Measured evaluation results on a reviewed labeled set.
+- [ ] Pull request template support.
+- [ ] Further category-filter improvements.
+- [ ] Shared rate limiting for multi-worker or multi-replica deployment.
+- [ ] Deployed public demo.
+
+<a id="evaluation-status"></a>
+## 📊 Evaluation Status
+
+**Not yet run.** PRism has no measured accuracy, precision, recall, or other evaluation result. The repository includes an evaluation schema and runner, but no reviewed labeled dataset. See the [evaluation plan](docs/EVALUATION.md).
+
+<a id="contributing"></a>
+## 🤝 Contributing
+
+1. Fork this repository.
+2. Create a focused branch: <code>git switch -c feat/your-change</code>.
+3. Make the change and add or update tests.
+4. Run the relevant checks from [Testing and Quality](#testing-and-quality).
+5. Commit and push your branch, then open a pull request against the repository's default branch.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting. Do not include <code>.env</code>, credentials, or repository-provided executable content.
+
+<a id="project-documents"></a>
+## 📚 Project Documents
+
+- [Product requirements](PRism_PRD.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Security](docs/SECURITY.md)
-- [API integration](docs/API_INTEGRATION.md)
+- [Security and privacy](docs/SECURITY.md)
+- [GitHub API integration](docs/API_INTEGRATION.md)
 - [Local AI design](docs/AI_DESIGN.md)
 - [MVP scope](docs/MVP_SCOPE.md)
 - [Evaluation plan](docs/EVALUATION.md)
+- [README banner artwork](docs/assets/banner.svg)
+- [Contribution guidance](CONTRIBUTING.md)
 
-## Release assets
+<a id="license"></a>
+## 📄 License
 
-- Social preview: `public/social-preview.png`.
-- A browser screenshot and recorded demo are pending; no browser automation runtime or labeled evaluation set is currently included. Do not present an illustrative image as a product screenshot.
-- Evaluation status: **Not yet run**. See [evaluation instructions](docs/EVALUATION.md); no accuracy claim is published.
+PRism is released under the MIT License. See [LICENSE](LICENSE).
 
-## License
+<p align="center"><strong>Built for maintainers.</strong></p>
 
-MIT. See [LICENSE](LICENSE).
+<p align="center">A live URL, browser screenshot, and demo recording are pending. No author block is included.</p>
