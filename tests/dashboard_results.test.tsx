@@ -6,6 +6,7 @@ import DashboardPage from "../src/dashboard/DashboardPage"
 import { ResultsPanel } from "../src/dashboard/ResultsPanel"
 import type { DashboardFinding, PullAnalysis, PullRequestSummary } from "../src/dashboard/api"
 import { BrowserRouter } from "../src/router"
+import { ThemeProvider } from "../src/theme"
 import { aiStatusLabel, categoryForAnalysis, groupFindings, summaryForAnalysis, uncertaintyForAnalysis } from "../src/dashboard/results"
 
 afterEach(() => {
@@ -62,6 +63,10 @@ function analysisWith(
       is_sample: false,
     },
   }
+}
+
+function renderDashboard() {
+  return render(<ThemeProvider><BrowserRouter><DashboardPage /></BrowserRouter></ThemeProvider>)
 }
 
 describe("dashboard result grouping and evidence", () => {
@@ -214,6 +219,7 @@ describe("dashboard repository flow", () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: true, addListener: vi.fn(), removeListener: vi.fn() })
     window.scrollTo = vi.fn()
     window.history.replaceState(null, "", "/dashboard")
+    window.localStorage.removeItem("prism-theme")
   })
 
   it("disables AI when the service status endpoint reports Ollama unavailable", async () => {
@@ -221,7 +227,7 @@ describe("dashboard repository flow", () => {
       ok: true,
       json: async () => ({ status: "ok", ai_available: false }),
     }))
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     const checkbox = await screen.findByRole("checkbox", { name: /AI analysis/i })
     await waitFor(() => expect(checkbox).toBeDisabled())
     expect(checkbox).not.toBeChecked()
@@ -231,7 +237,7 @@ describe("dashboard repository flow", () => {
   it("shows bundled sample mode without making repository or analysis requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "ok", ai_available: false }) })
     vi.stubGlobal("fetch", fetchMock)
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.click(screen.getByRole("checkbox", { name: /Sample mode/ }))
     expect(await screen.findByText("SAMPLE DATA, not a live analysis")).toBeInTheDocument()
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(["/api/status"])
@@ -239,7 +245,7 @@ describe("dashboard repository flow", () => {
 
   it("rejects an invalid repository URL with the SRS error text", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ai_available: false }) }))
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/owner/repo/pull/2" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     expect(await screen.findByRole("alert")).toHaveTextContent("That doesn't look like a GitHub repository URL. Use the form https://github.com/owner/repo.")
@@ -259,7 +265,7 @@ describe("dashboard repository flow", () => {
         changed_files: [], files_truncated: false, comparison: { compared: 1, available: 1 },
       }) } as Response
     }))
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     await screen.findByRole("heading", { name: "Open pull requests" })
@@ -316,7 +322,7 @@ describe("dashboard repository flow", () => {
       } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
 
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), {
       target: { value: "https://github.com/acme/project.git/" },
@@ -356,7 +362,7 @@ describe("dashboard repository flow", () => {
         }),
       } as Response
     }))
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     await screen.findAllByText("Likely legitimate")
@@ -395,7 +401,7 @@ describe("dashboard repository flow", () => {
       } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     await screen.findByRole("heading", { name: "Open pull requests" })
@@ -426,7 +432,7 @@ describe("dashboard repository flow", () => {
       }) } as Response
     })
     vi.stubGlobal("fetch", fetchMock)
-    render(<BrowserRouter><DashboardPage /></BrowserRouter>)
+    renderDashboard()
     fireEvent.change(screen.getByLabelText("GitHub repository URL"), { target: { value: "https://github.com/acme/project" } })
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }))
     await screen.findByRole("heading", { name: "Open pull requests" })
