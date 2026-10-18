@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: prism
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PRISM_DEV
+        value: "0"
+      - key: PRISM_DIST_DIR
+        value: /app/dist
+      - key: PRISM_TRUST_PROXY
+        value: "1"
+      # Same-origin deployment does not need cross-origin API access.
+      - key: PRISM_ALLOWED_ORIGINS
+        value: ""
+      - key: PRISM_RATE_LIMIT_REQUESTS
+        value: "20"
+      - key: PRISM_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"
+      - key: PRISM_MAX_COMPARISON_PRS
+        value: "10"
+      - key: GITHUB_TOKEN
+        sync: false

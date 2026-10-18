@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PRism offline evaluation fixture",
+  "type": "object",
+  "required": ["id", "url", "pr_number", "title", "description", "files", "guideline", "human_label", "evidence_notes"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "format": "uri" },
+    "pr_number": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string" },
+    "description": { "type": ["string", "null"] },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["filename", "status", "patch"],
+        "properties": {
+          "filename": { "type": "string" },
+          "status": { "type": "string" },
+          "patch": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "guideline": {
+      "type": "object",
+      "required": ["status", "path", "text"],
+      "properties": {
+        "status": { "enum": ["found", "not_found", "retrieval_failed"] },
+        "path": { "type": ["string", "null"] },
+        "text": { "type": ["string", "null"] }
+      }
+    },
+    "human_label": { "enum": ["Likely legitimate", "Needs review", "Potentially suspicious", "Insufficient information", null] },
+    "evidence_notes": { "type": "string" },
+    "limitation_notes": { "type": "array", "items": { "type": "string" } }
+  }
+}
