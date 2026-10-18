@@ -11,6 +11,7 @@ import { FailureSection } from "./landing/sections/FailureSection"
 import { FaqSection } from "./landing/sections/FaqSection"
 import { DashboardLink } from "./landing/DashboardLink"
 import { Brand } from "./landing/Brand"
+import { ThemeToggle } from "./ThemeToggle"
 import {
   closingContent,
   footerLinks,
@@ -60,6 +61,7 @@ export default function LandingPage() {
             {navigationCopy.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
           </nav>
           <div className="landing-nav-actions">
+            <ThemeToggle />
             <DashboardLink className="landing-nav-cta">{landingActions.openDashboard} <Arrow /></DashboardLink>
             <a className="landing-try-sample" href="#try-it">{landingActions.trySample}</a>
           </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { Link, useLocation } from "../router"
 import { Brand } from "../landing/Brand"
+import { ThemeToggle } from "../ThemeToggle"
 import { footerLinks, LANDING_PATH, sectionNavNames, trialCopy } from "../landing/content"
 import { SampleResultCard, validRepositoryUrl } from "../landing/sections/TrialSection"
 import {
@@ -199,7 +200,10 @@ export default function DashboardPage() {
     <main className="dashboard-page" ref={pageRef}>
       <header className="dashboard-nav">
         <Link to={LANDING_PATH} className="brand-link" aria-label={sectionNavNames.home}><Brand /></Link>
-        <Link to={LANDING_PATH} className="dashboard-back">← Back to landing page</Link>
+        <div className="dashboard-nav-actions">
+          <ThemeToggle />
+          <Link to={LANDING_PATH} className="dashboard-back">← Back to landing page</Link>
+        </div>
       </header>
 
       <section className="dashboard-shell" aria-labelledby="dashboard-title">

@@ -5,6 +5,11 @@ import { BrowserRouter, useLocation } from './router'
 import { DASHBOARD_PATH } from './landing/content'
 import { Suspense, lazy } from 'react'
 import './index.css'
+import './theme.css'
+import { ThemeProvider, readSavedTheme } from './theme'
+
+// Set the stored theme before React mounts to avoid a flash on page load.
+document.documentElement.dataset.theme = readSavedTheme()
 
 const DashboardPage = lazy(() => import('./dashboard/DashboardPage'))
 
@@ -19,6 +24,6 @@ function AppRoutes() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter><AppRoutes /></BrowserRouter>
+    <ThemeProvider><BrowserRouter><AppRoutes /></BrowserRouter></ThemeProvider>
   </React.StrictMode>,
 )
